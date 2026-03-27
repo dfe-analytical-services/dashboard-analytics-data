@@ -11,7 +11,7 @@ if (Sys.info()["sysname"] == "Windows") {
     catalog,
     "/",
     schema_raw,
-    "/ga_auth/",
+    "/",
     auth_file
   )
 }
