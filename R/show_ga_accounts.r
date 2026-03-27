@@ -10,6 +10,8 @@ pak::pak(setdiff(packages, rownames(installed.packages())))
 
 source("utils.R")
 source("params.R")
+
+if(!is.null(auth_json_path)){message("Auth json path set to: ", auth_json_path)} 
 googleAnalyticsR::ga_auth(json_file = auth_json_path)
 account_list <- googleAnalyticsR::ga_account_list(type = "ga4")
 
