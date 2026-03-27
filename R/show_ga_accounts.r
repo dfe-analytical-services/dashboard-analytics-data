@@ -2,7 +2,7 @@
 # DBTITLE 1,Install and load dependencies
 # COMMAND ----------
 
-if(system.file(package='as')=="") {install.packages("pak")}
+if(system.file(package='pak')=="") {install.packages("pak")}
 packages <- c("googleAnalyticsR", "dplyr")
 pak::pak(setdiff(packages, rownames(installed.packages())))
 
