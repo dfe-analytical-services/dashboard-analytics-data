@@ -1,5 +1,5 @@
 catalog <- "catalog_40_copper_statistics_services"
-schema <- "dashboard_analytics_raw"
+schema_raw <- "dashboard_analytics_raw"
 auth_file <- "ga_auth/dfe-dashboard-analytics-fd61afbed470.json"
 
 print(Sys.info())
