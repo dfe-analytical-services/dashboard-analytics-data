@@ -15,9 +15,15 @@ packages <- c(
 install_if_needed(packages)
 lapply(packages, library, character.only = TRUE)
 
-table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.dashboard_ga4"
+table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_ga4_raw_dashboard_daily"
 
-sc <- spark_connect(method = "databricks")
+con <- DBI::dbConnect(
+  odbc::databricks(),
+  httpPath = Sys.getenv("DATABRICKS_CLUSTER_PATH"),
+  driver = "Databricks ODBC Driver",
+  catalog = "catalog_40_copper_statistics_services",
+  useNativeQuery = FALSE #required for dbWriteTable to work
+  )
 
 # COMMAND ----------
 
@@ -28,7 +34,7 @@ ga_auth(json = auth_path)
 
 # DBTITLE 1,Check for latest date from existing data
 
-dbExecute(sc, paste(
+dbExecute(con, paste(
   "CREATE TABLE IF NOT EXISTS",
   table_name,
   "(date DATE, users DOUBLE, pageviews DOUBLE, sessions DOUBLE)"
@@ -126,7 +132,7 @@ test_that("Data has no missing values", {
 # COMMAND ----------
 
 # DBTITLE 1,Write to table
-ga4_spark_df <- copy_to(sc, updated_data, overwrite = TRUE)
+ga4_spark_df <- copy_to(con, updated_data, overwrite = TRUE)
 
 # Write to temp table while we confirm we're good to overwrite data
 spark_write_table(ga4_spark_df, paste0(table_name, "_temp"), mode = "overwrite")
@@ -138,7 +144,7 @@ test_that("Temp table data matches updated data", {
 })
 
 # Replace the old table with the new one
-dbExecute(sc, paste0("DROP TABLE IF EXISTS ", table_name))
-dbExecute(sc, paste0("ALTER TABLE ", table_name, "_temp RENAME TO ", table_name))
+dbExecute(con, paste0("DROP TABLE IF EXISTS ", table_name))
+dbExecute(con, paste0("ALTER TABLE ", table_name, "_temp RENAME TO ", table_name))
 
 print_changes_summary(temp_table_data, previous_data)

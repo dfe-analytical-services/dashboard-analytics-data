@@ -2,14 +2,25 @@
 # DBTITLE 1,Load dependencies
 source("utils.R")
 
-packages <- c("sparklyr", "DBI", "odbc", "testthat", "arrow")
+packages <- c("DBI", "odbc", "testthat", "arrow")
 
 install_if_needed(packages)
 lapply(packages, library, character.only = TRUE)
 
-table_name <- "catalog_40_copper_statistics_services.analytics_app.ees__last_updated"
+table_name <- "catalog_40_copper_statistics_services.analytics_app.dashboard_last_updated"
 
-#sc <- spark_connect(method = "databricks")
+con <- DBI::dbConnect(
+  odbc::databricks(),
+  driver = "Databricks ODBC Driver",
+  serverHostname = "adb-5037484389568426.6.azuredatabricks.net",
+  httpPath = "sql/protocolv1/o/5037484389568426/0318-153305-wjackn76",
+  catalog = "catalog_40_copper_statistics_services",
+  useNativeQuery = FALSE
+)
+
+
+df <- DBI::dbGetQuery(con, paste0("SELECT * FROM ", table_name))
+df
 
 # COMMAND ----------
 
