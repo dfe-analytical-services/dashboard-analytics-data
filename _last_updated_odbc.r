@@ -12,8 +12,8 @@ table_name <- "catalog_40_copper_statistics_services.analytics_app.dashboard_las
 con <- DBI::dbConnect(
   odbc::databricks(),
   driver = "Databricks ODBC Driver",
-  serverHostname = "adb-5037484389568426.6.azuredatabricks.net",
-  httpPath = "sql/protocolv1/o/5037484389568426/0318-153305-wjackn76",
+  workspace = Sys.getenv("DATABRICKS_HOST"),
+  httpPath = Sys.getenv("DATABRICKS_CLUSTER_PATH"),
   catalog = "catalog_40_copper_statistics_services",
   useNativeQuery = FALSE
 )
