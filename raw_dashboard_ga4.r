@@ -86,12 +86,12 @@ DBI::dbExecute(conn, sql_create_table)
 
 last_date <- if(is_databricks()) {
   sparklyr::sdf_sql(conn, paste("SELECT MAX(date) FROM", table_name)) %>%
-  collect() %>%
+  dplyr::collect() %>%
   dplyr::pull() %>%
   as.character()
 } else {
   DBI::dbGetQuery(conn, paste0("SELECT MAX(date) AS last_date FROM ", table_name)) %>%
-  collect() %>%
+  dplyr::collect() %>%
   dplyr::pull() %>%
   as.character()
 }
@@ -99,6 +99,15 @@ last_date <- if(is_databricks()) {
 if (is.na(last_date)) {
   # Before tracking started so gets the whole series that is available
   last_date <- "2022-02-02"
+}
+
+create_dates <- if (!is_databricks()) {
+  function(run_date = Sys.Date()) {
+    data.frame(
+      latest_date = as.Date(run_date),
+      stringsAsFactors = FALSE
+    )
+  }
 }
 
 reference_dates <- create_dates(Sys.Date() - 2) # doing this to make sure the data is complete when we request it
@@ -124,7 +133,7 @@ test_that("Query dates are valid", {
 previous_data <- if(is_databricks()) {
   sparklyr::sdf_sql(conn, paste("SELECT * FROM", table_name)) %>% collect()
 } else {
-  DBI::dbGetQuery(conn, paste0("SELECT * AS previous_data FROM ", table_name))
+  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
 }
 
 ga_daily_dashboard_a <- function(property_id, changes_since){
@@ -142,7 +151,7 @@ message(property_id)
     }
 
 account_list <- ga_account_list(type = "ga4") |>
-  dplyr::filter(!(propertyId %in% c(320388694,355503959,389933791,530617374,509854306)))
+  dplyr::filter(!(propertyId %in% c(509854306)))
 
 result_list <- lapply(account_list$propertyId, ga_daily_dashboard_a, changes_since = changes_since)
 
