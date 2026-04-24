@@ -101,13 +101,11 @@ if (is.na(last_date)) {
   last_date <- "2022-02-02"
 }
 
-create_dates <- if (!is_databricks()) {
-  function(run_date = Sys.Date()) {
-    data.frame(
-      latest_date = as.Date(run_date),
-      stringsAsFactors = FALSE
+create_dates <- function(run_date = Sys.Date()) {
+  data.frame(
+    latest_date = as.Date(run_date),
+    stringsAsFactors = FALSE
     )
-  }
 }
 
 reference_dates <- create_dates(Sys.Date() - 2) # doing this to make sure the data is complete when we request it
@@ -130,14 +128,17 @@ test_that("Query dates are valid", {
 # COMMAND ----------
 
 # DBTITLE 1,Pull in data
-previous_data <- if(is_databricks()) {
-  sparklyr::sdf_sql(conn, paste("SELECT * FROM", table_name)) %>% collect()
-} else {
-  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
-}
-
+previous_data <- (
+  if(is_databricks()) {
+    sparklyr::sdf_sql(conn, paste("SELECT * FROM", table_name)) %>% collect()
+    } else {
+      DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
+    }
+  )
+  
 ga_daily_dashboard_a <- function(property_id, changes_since){
 message(property_id)
+tryCatch(
   ga_data(
         property_id,
         date_range = c(changes_since, changes_to),
@@ -146,12 +147,14 @@ message(property_id)
         limit = -1
       ) |>
     dplyr::mutate(property_id = property_id) |>
-    dplyr::rename("pageviews" = screenPageViews) |>
-    dplyr::rename("users" = totalUsers)
+    dplyr::relocate(property_id, .before = date),
+    error = function(e) {
+      data.frame(property_id = NA, date = NA, totalUsers = NA, screenPageViews = NA, sessions = NA)
+    }
+    )
     }
 
-account_list <- ga_account_list(type = "ga4") |>
-  dplyr::filter(!(propertyId %in% c(509854306)))
+account_list <- ga_account_list(type = "ga4")
 
 result_list <- lapply(account_list$propertyId, ga_daily_dashboard_a, changes_since = changes_since)
 
@@ -199,16 +202,16 @@ test_that("Data has no missing values", {
 ga4_spark_df <- copy_to(conn, updated_data, overwrite = TRUE)
 
 # Write to temp table while we confirm we're good to overwrite data
-if(is(databricks)) {
+if(is_databricks()) {
   spark_write_table(ga4_spark_df, paste0(table_name, "_temp"), mode = "overwrite")
 } else {
   dbWriteTable(conn, paste0(table_name, "_temp"), ga4_spark_df, overwrite = TRUE)
 }
 
-temp_table_data <- if(is(databricks)) {
+temp_table_data <- if(is_databricks()) {
   sparklyr::sdf_sql(conn, paste0("SELECT * FROM ", table_name, "_temp")) %>% collect()
 } else {
-  dbGetQuery(conn, paste0("SELECT * FROM ", table_name, "_temp")) %>% collect()
+  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name, "_temp"))
 }
 
 test_that("Temp table data matches updated data", {
