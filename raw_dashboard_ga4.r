@@ -199,13 +199,13 @@ test_that("Data has no missing values", {
 # COMMAND ----------
 
 # DBTITLE 1,Write to table
-ga4_spark_df <- copy_to(conn, updated_data, overwrite = TRUE)
+ga4_df <- copy_to(conn, updated_data, overwrite = TRUE)
 
 # Write to temp table while we confirm we're good to overwrite data
 if(is_databricks()) {
-  spark_write_table(ga4_spark_df, paste0(table_name, "_temp"), mode = "overwrite")
+  spark_write_table(ga4_df, paste0(table_name, "_temp"), mode = "overwrite")
 } else {
-  dbWriteTable(conn, paste0(table_name, "_temp"), ga4_spark_df, overwrite = TRUE)
+  dbWriteTable(conn, paste0(table_name, "_temp"), ga4_df, overwrite = TRUE)
 }
 
 temp_table_data <- if(is_databricks()) {
