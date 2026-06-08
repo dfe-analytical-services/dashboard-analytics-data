@@ -1,8 +1,5 @@
 # Databricks notebook source
 # DBTITLE 1,Install and load dependencies
-here::i_am("R/raw_dashboard_properties.r")
-source(here("R/utils.R"))
-source(here::here("R/params.R"))
 
 packages <- c(
   "googleAnalyticsR",
@@ -23,15 +20,18 @@ packages <- if (is_databricks()) {
   )
 }
 
-install_if_missing <- function(pkgs) {
-  missing <- pkgs[!pkgs %in% rownames(installed.packages())]
-  if (length(missing)) {
-    install.packages(missing, dependencies = TRUE)
-  }
+missing_packages <- setdiff(packages, rownames(installed.packages()))
+if (length(missing_packages)) {
+  pak::pkg_install(missing_packages, ask = FALSE)
+} else {
+  message("All packages already installed")
 }
-
-install_if_missing(packages)
 lapply(packages, library, character.only = TRUE)
+
+here::i_am("R/raw_dashboard_properties.r")
+source(here("R/utils.R"))
+source(here::here("R/params.R"))
+
 
 table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_daily"
 
