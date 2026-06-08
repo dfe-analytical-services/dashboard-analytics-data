@@ -4,7 +4,12 @@
 
 if(system.file(package='pak')=="") {install.packages("pak")}
 packages <- c("googleAnalyticsR", "dplyr", "DBI")
-pak::pak(setdiff(packages, rownames(installed.packages())))
+missing_packages <- setdiff(packages, rownames(installed.packages()))
+if(length(missing_packages)) {
+  pak::pkg_install(missing_packages, ask = FALSE)
+} else {
+  message("All packages already installed")
+}
 lapply(packages, library, character.only = TRUE)
 
 
@@ -15,7 +20,8 @@ source("R/params.R")
 
 if(!is.null(auth_json_path)){message("Auth json path set to: ", auth_json_path)} 
 googleAnalyticsR::ga_auth(json_file = auth_json_path)
-account_list <- googleAnalyticsR::ga_account_list(type = "ga4")
+account_list <- googleAnalyticsR::ga_account_list(type = "ga4") |>
+  dplyr::filter(account_name != "Explore Education Statistics")
 
 print(account_list)
 
