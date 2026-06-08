@@ -1,6 +1,8 @@
 # Databricks notebook source
 # DBTITLE 1,Install and load dependencies
-source("R/utils.R")
+here::i_am("R/raw_dashboard_properties.r")
+source(here("R/utils.R"))
+source(here::here("R/params.R"))
 
 packages <- if (is_databricks()) { c(
   "googleAnalyticsR",

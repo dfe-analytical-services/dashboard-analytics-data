@@ -14,9 +14,9 @@ lapply(packages, library, character.only = TRUE)
 
 
 # COMMAND ----------
-
-source("R/utils.R")
-source("R/params.R")
+here::i_am("R/raw_dashboard_properties.r")
+source(here("R/utils.R"))
+source(here::here("R/params.R"))
 
 if(!is.null(auth_json_path)){message("Auth json path set to: ", auth_json_path)} 
 googleAnalyticsR::ga_auth(json_file = auth_json_path)
