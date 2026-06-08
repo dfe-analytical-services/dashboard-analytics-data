@@ -32,7 +32,7 @@ print(account_list)
 conn <- connect_databricks()
 
 if (is_databricks()) {
-  spark_write_table(
+  sparklyr::spark_write_table(
     account_list,
     "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_dashboard_properties",
     mode = "overwrite"
