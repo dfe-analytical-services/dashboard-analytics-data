@@ -10,7 +10,6 @@ connect_databricks <- function(
 
     sc <- sparklyr::spark_connect(method = "databricks")
     return(sc)
-
   } else {
     message("Running locally: using Databricks ODBC")
 
@@ -32,7 +31,10 @@ mirror_date <- "14/02/2025" # can use to freeze versions of dependencies
 options(
   repos = c(
     # Get prepackaged binaries for speed where possible
-    linuxBinaries = paste0("https://packagemanager.posit.co/cran/__linux__/focal/", mirror_date),
+    linuxBinaries = paste0(
+      "https://packagemanager.posit.co/cran/__linux__/focal/",
+      mirror_date
+    ),
     fallbackCRAN = "https://cloud.r-project.org"
   )
 )
@@ -82,7 +84,10 @@ print_changes_summary <- function(new_table, old_table) {
     message("Number of rows: ", nrow(new_table))
     message("Column names: ", paste(names(new_table), collapse = ", "))
   } else {
-    new_dates <- setdiff(as.character(new_table$date), as.character(old_table$date))
+    new_dates <- setdiff(
+      as.character(new_table$date),
+      as.character(old_table$date)
+    )
     new_rows <- nrow(as.data.frame(new_table)) - nrow(as.data.frame(old_table))
 
     message("Updated table summary...")
