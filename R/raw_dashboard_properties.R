@@ -5,7 +5,7 @@
 if (system.file(package = 'pak') == "") {
   install.packages("pak")
 }
-packages <- c("googleAnalyticsR", "dplyr", "DBI", "here")
+packages <- c("googleAnalyticsR", "dplyr", "DBI", "here", "sparklyr")
 missing_packages <- setdiff(packages, rownames(installed.packages()))
 if (length(missing_packages)) {
   pak::pkg_install(missing_packages, ask = FALSE)
@@ -31,12 +31,17 @@ print(account_list)
 
 conn <- connect_databricks()
 
-dbWriteTable(
-  conn,
-  Id(
-    schema = "dashboard_analytics_raw",
-    table = "ga4_dashboard_properties"
-  ),
-  account_list,
-  overwrite = TRUE
-)
+if (is_databricks()) {
+  spark_write_table(
+    account_list,
+    "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_dashboard_properties",
+    mode = "overwrite"
+  )
+} else {
+  dbWriteTable(
+    conn,
+    Id(schema = "dashboard_analytics_raw", table = "ga4_dashboard_properties"),
+    account_list,
+    overwrite = TRUE
+  )
+}
