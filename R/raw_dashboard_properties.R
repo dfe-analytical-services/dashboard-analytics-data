@@ -33,7 +33,10 @@ conn <- connect_databricks()
 
 dbWriteTable(
   conn,
-  paste0("ga4_dashboard_properties"),
+  Id(
+    schema = "dashboard_analytics_raw",
+    table = "ga4_dashboard_properties"
+  ),
   account_list,
   overwrite = TRUE
 )

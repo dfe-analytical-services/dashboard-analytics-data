@@ -10,15 +10,9 @@ packages <- c(
   "lubridate",
   "arrow",
   "here",
+  "sparklyr",
   "dplyr"
 )
-
-packages <- if (is_databricks()) {
-  c(
-    packages,
-    "sparklyr",
-  )
-}
 
 missing_packages <- setdiff(packages, rownames(installed.packages()))
 if (length(missing_packages)) {
