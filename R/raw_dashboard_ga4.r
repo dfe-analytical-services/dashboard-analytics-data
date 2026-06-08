@@ -1,10 +1,6 @@
 # Databricks notebook source
 # DBTITLE 1,Install and load dependencies
-source("utils.R")
-
-is_databricks <- function() {
-  nzchar(Sys.getenv("DATABRICKS_RUNTIME_VERSION"))
-}
+source("R/utils.R")
 
 packages <- if (is_databricks()) { c(
   "googleAnalyticsR",
@@ -37,30 +33,6 @@ install_if_missing(packages)
 lapply(packages, library, character.only = TRUE)
 
 table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_daily"
-
-connect_databricks <- function(
-  catalog = "catalog_40_copper_statistics_services"
-) {
-  if (is_databricks()) {
-    message("Running on Databricks: using sparklyr")
-
-    sc <- sparklyr::spark_connect(method = "databricks")
-    return(sc)
-
-  } else {
-    message("Running locally: using Databricks ODBC")
-
-    con <- DBI::dbConnect(
-      odbc::databricks(),
-      driver = "Databricks ODBC Driver",
-      workspace = Sys.getenv("DATABRICKS_HOST"),
-      httpPath = Sys.getenv("DATABRICKS_CLUSTER_PATH"),
-      catalog = catalog,
-      useNativeQuery = FALSE
-    )
-    return(con)
-  }
-}
 
 # COMMAND ----------
 
