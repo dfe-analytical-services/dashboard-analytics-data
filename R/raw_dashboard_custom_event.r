@@ -40,15 +40,7 @@ if (is_databricks()) {
 # COMMAND ----------
 
 # DBTITLE 1,Check for latest date from existing data
-sql_create_table <- paste(
-  "CREATE TABLE IF NOT EXISTS",
-  table_name,
-  "(date DATE, event_category STRING, event_label STRING, eventCount DOUBLE)"
-)
-
 conn <- connect_databricks()
-
-DBI::dbExecute(conn, sql_create_table)
 
 last_date <- if (is_databricks()) {
   sparklyr::sdf_sql(conn, paste("SELECT MAX(date) FROM", table_name)) %>%
@@ -70,14 +62,10 @@ if (is.na(last_date)) {
   last_date <- "2022-02-02"
 }
 
-create_dates <- function(run_date = Sys.Date()) {
-  data.frame(
-    latest_date = as.Date(run_date),
-    stringsAsFactors = FALSE
-  )
-}
-
-reference_dates <- create_dates(Sys.Date() - 2) # doing this to make sure the data is complete when we request it
+reference_dates <- data.frame(
+  latest_date = as.Date(Sys.Date() - 2), # doing this to make sure the data is complete when we request it
+  stringsAsFactors = FALSE
+)
 
 changes_since <- as.Date(last_date) + 1
 changes_to <- as.Date(reference_dates$latest_date)
@@ -99,15 +87,11 @@ test_that("Query dates are valid", {
 # COMMAND ----------
 
 # DBTITLE 1,Pull in data
-#previous_data <- (if (is_databricks()) {
-#  sparklyr::sdf_sql(conn, paste("SELECT * FROM", table_name)) %>% collect()
-#} else {
-#  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
-#})
-
-# No previous data yet - pull all available history
-changes_since <- as.Date("2022-02-02")
-changes_to <- Sys.Date() - 2
+previous_data <- (if (is_databricks()) {
+  sparklyr::sdf_sql(conn, paste("SELECT * FROM", table_name)) %>% collect()
+} else {
+  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
+})
 
 ga_daily_dashboard_a <- function(property_id, changes_since) {
   message(property_id)
@@ -147,6 +131,7 @@ latest_data <- dplyr::bind_rows(result_list) |>
     event_category = `customEvent:event_category`,
     event_label = `customEvent:event_label`
   ) |>
+  dplyr::filter(event_category != "(not set)" & !(event_label %in% c("(not set)", ""))) |>
   dplyr::arrange(desc(date)) |>
   tidyr::drop_na()
 
