@@ -11,6 +11,7 @@ if (system.file(package = 'pak') == "") {
 packages <- c("googleAnalyticsR", "dplyr", "DBI", "here", "sparklyr")
 missing_packages <- setdiff(packages, rownames(installed.packages()))
 if (length(missing_packages)) {
+  message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
   pak::pkg_install(missing_packages, ask = FALSE)
 } else {
   message("All packages already installed")
