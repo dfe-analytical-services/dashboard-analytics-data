@@ -1,6 +1,11 @@
 # Databricks notebook source
 # DBTITLE 1,Install and load dependencies
 
+if(!("here" %in% rownames(installed.packages()))){
+  pak::pak("here")
+}
+source(here::here("R/params.R"))
+
 packages <- c(
   "googleAnalyticsR",
   "googleAuthR",
@@ -24,7 +29,6 @@ lapply(packages, library, character.only = TRUE)
 
 here::i_am("R/raw_dashboard_properties.r")
 source(here("R/utils.R"))
-source(here::here("R/params.R"))
 
 
 table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_daily"
