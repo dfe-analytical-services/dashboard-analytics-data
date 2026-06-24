@@ -2,6 +2,8 @@
 # DBTITLE 1,Install and load dependencies
 # COMMAND ----------
 
+source(here::here("R/params.R"))
+
 if (system.file(package = 'pak') == "") {
   install.packages("pak")
 }
@@ -18,7 +20,6 @@ lapply(packages, library, character.only = TRUE)
 # COMMAND ----------
 here::i_am("R/raw_dashboard_properties.r")
 source(here("R/utils.R"))
-source(here::here("R/params.R"))
 
 if (!is.null(auth_json_path)) {
   message("Auth json path set to: ", auth_json_path)
