@@ -2,6 +2,7 @@
 # DBTITLE 1,Install and load dependencies
 # COMMAND ----------
 
+here::i_am("R/raw_dashboard_properties.r")
 source(here::here("R/params.R"))
 
 if (system.file(package = 'pak') == "") {
@@ -18,7 +19,6 @@ lapply(packages, library, character.only = TRUE)
 
 
 # COMMAND ----------
-here::i_am("R/raw_dashboard_properties.r")
 source(here("R/utils.R"))
 
 if (!is.null(auth_json_path)) {
