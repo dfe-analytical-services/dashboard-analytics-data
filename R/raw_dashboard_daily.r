@@ -1,6 +1,7 @@
 # Databricks notebook source
 # DBTITLE 1,Install and load dependencies
 
+here::i_am("R/raw_dashboard_properties.r")
 source(here::here("R/params.R"))
 
 packages <- c(
@@ -18,13 +19,13 @@ packages <- c(
 
 missing_packages <- setdiff(packages, rownames(installed.packages()))
 if (length(missing_packages)) {
+  message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
   pak::pkg_install(missing_packages, ask = FALSE)
 } else {
   message("All packages already installed")
 }
 lapply(packages, library, character.only = TRUE)
 
-here::i_am("R/raw_dashboard_properties.r")
 source(here("R/utils.R"))
 
 

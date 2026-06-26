@@ -2,6 +2,7 @@
 # DBTITLE 1,Install and load dependencies
 # COMMAND ----------
 
+here::i_am("R/raw_dashboard_properties.r")
 source(here::here("R/params.R"))
 
 if (system.file(package = 'pak') == "") {
@@ -10,6 +11,7 @@ if (system.file(package = 'pak') == "") {
 packages <- c("googleAnalyticsR", "dplyr", "DBI", "here", "sparklyr")
 missing_packages <- setdiff(packages, rownames(installed.packages()))
 if (length(missing_packages)) {
+  message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
   pak::pkg_install(missing_packages, ask = FALSE)
 } else {
   message("All packages already installed")
@@ -18,7 +20,6 @@ lapply(packages, library, character.only = TRUE)
 
 
 # COMMAND ----------
-here::i_am("R/raw_dashboard_properties.r")
 source(here("R/utils.R"))
 
 if (!is.null(auth_json_path)) {
