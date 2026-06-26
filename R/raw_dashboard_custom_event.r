@@ -93,7 +93,7 @@ previous_data <- (if (is_databricks()) {
   DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
 })
 
-ga_daily_dashboard_a <- function(property_id, changes_since) {
+ga_custom_event <- function(property_id, changes_since) {
   message(property_id)
   tryCatch(
     ga_data(
@@ -104,15 +104,19 @@ ga_daily_dashboard_a <- function(property_id, changes_since) {
       limit = -1
     ) |>
       dplyr::mutate(property_id = property_id) |>
-      dplyr::relocate(property_id, .before = date),
+      dplyr::relocate(property_id, .before = date) |>
+      dplyr::rename(
+        event_category = `customEvent:event_category`,
+        event_label = `customEvent:event_label`
+      ) |>
+      dplyr::filter(event_category != "(not set)" & !(event_label %in% c("(not set)", ""))),
     error = function(e) {
       data.frame(
         property_id = NA,
         date = NA,
-        `customEvent:event_category` = NA,
-        `customEvent:event_label` = NA,
-        eventCount = NA,
-        check.names = FALSE
+        event_category = NA,
+        event_label = NA,
+        eventCount = NA
       )
     }
   )
@@ -122,16 +126,11 @@ account_list <- ga_account_list(type = "ga4")
 
 result_list <- lapply(
   account_list$propertyId,
-  ga_daily_dashboard_a,
+  ga_custom_event,
   changes_since = changes_since
 )
 
 latest_data <- dplyr::bind_rows(result_list) |>
-  dplyr::rename(
-    event_category = `customEvent:event_category`,
-    event_label = `customEvent:event_label`
-  ) |>
-  dplyr::filter(event_category != "(not set)" & !(event_label %in% c("(not set)", ""))) |>
   dplyr::arrange(desc(date)) |>
   tidyr::drop_na()
 
