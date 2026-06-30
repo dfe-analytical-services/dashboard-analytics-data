@@ -63,6 +63,10 @@ if (nrow(missing_properties) > 0) {
 
 # COMMAND ----------
 
+display(ga_properties)
+
+# COMMAND ----------
+
 # DBTITLE 1,Write to dashboard_property_reference
 reference_table <- app_reference |>
   dplyr::left_join(
@@ -70,6 +74,32 @@ reference_table <- app_reference |>
     by = "property_id"
   ) |>
   dplyr::relocate(property_name, .after = property_id)
+
+# Validate: check for duplicate property IDs
+duplicate_ids <- reference_table |>
+  dplyr::filter(duplicated(property_id) | duplicated(property_id, fromLast = TRUE)) |>
+  dplyr::pull(property_id)
+
+if (length(duplicate_ids) > 0) {
+  stop(
+    "Validation failed: ", length(unique(duplicate_ids)), " duplicate property_id(s) found in reference table:\n",
+    paste0("  - ", unique(duplicate_ids), collapse = "\n")
+  )
+}
+
+# Validate: check for missing property names (property in CSV not found in ga4_dashboard_properties)
+missing_names <- reference_table |>
+  dplyr::filter(is.na(property_name)) |>
+  dplyr::pull(property_id)
+
+if (length(missing_names) > 0) {
+  stop(
+    "Validation failed: ", length(missing_names), " property_id(s) in app-reference.csv have no matching property_name in ga4_dashboard_properties:\n",
+    paste0("  - ", missing_names, collapse = "\n")
+  )
+}
+
+message("Validation passed: no duplicate property IDs, no missing property names")
 
 output_table <- "catalog_40_copper_statistics_services.dashboard_analytics_app.dashboard_property_reference"
 
