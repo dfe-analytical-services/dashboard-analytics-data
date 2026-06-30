@@ -1,9 +1,5 @@
 # Databricks notebook source
 # DBTITLE 1,Install and load dependencies
-
-here::i_am("R/raw_dashboard_properties.r")
-source(here::here("R/params.R"))
-
 packages <- c(
   "googleAnalyticsR",
   "googleAuthR",
@@ -19,20 +15,18 @@ packages <- c(
 
 missing_packages <- setdiff(packages, rownames(installed.packages()))
 if (length(missing_packages)) {
-  message(
-    "Installing missing packages: ",
-    paste(missing_packages, collapse = ", ")
-  )
-  pak::pkg_install(missing_packages, ask = FALSE)
+  install.packages(missing_packages)
 } else {
   message("All packages already installed")
 }
 lapply(packages, library, character.only = TRUE)
 
+here::i_am("R/raw_dashboard_properties.r")
 source(here("R/utils.R"))
+source(here::here("R/params.R"))
 
 
-table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_daily"
+table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event"
 
 # COMMAND ----------
 
@@ -46,15 +40,7 @@ if (is_databricks()) {
 # COMMAND ----------
 
 # DBTITLE 1,Check for latest date from existing data
-sql_create_table <- paste(
-  "CREATE TABLE IF NOT EXISTS",
-  table_name,
-  "(date DATE, users DOUBLE, pageviews DOUBLE, sessions DOUBLE)"
-)
-
 conn <- connect_databricks()
-
-DBI::dbExecute(conn, sql_create_table)
 
 last_date <- if (is_databricks()) {
   sparklyr::sdf_sql(conn, paste("SELECT MAX(date) FROM", table_name)) %>%
@@ -76,14 +62,10 @@ if (is.na(last_date)) {
   last_date <- "2022-02-02"
 }
 
-create_dates <- function(run_date = Sys.Date()) {
-  data.frame(
-    latest_date = as.Date(run_date),
-    stringsAsFactors = FALSE
-  )
-}
-
-reference_dates <- create_dates(Sys.Date() - 2) # doing this to make sure the data is complete when we request it
+reference_dates <- data.frame(
+  latest_date = as.Date(Sys.Date() - 2), # doing this to make sure the data is complete when we request it
+  stringsAsFactors = FALSE
+)
 
 changes_since <- as.Date(last_date) + 1
 changes_to <- as.Date(reference_dates$latest_date)
@@ -111,25 +93,30 @@ previous_data <- (if (is_databricks()) {
   DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
 })
 
-ga_daily_dashboard_a <- function(property_id, changes_since) {
+ga_custom_event <- function(property_id, changes_since) {
   message(property_id)
   tryCatch(
     ga_data(
       property_id,
       date_range = c(changes_since, changes_to),
-      metrics = c("totalUsers", "screenPageViews", "sessions"),
-      dimensions = "date",
+      metrics = c("eventCount"),
+      dimensions = c("date", "customEvent:event_category", "customEvent:event_label"),
       limit = -1
     ) |>
       dplyr::mutate(property_id = property_id) |>
-      dplyr::relocate(property_id, .before = date),
+      dplyr::relocate(property_id, .before = date) |>
+      dplyr::rename(
+        event_category = `customEvent:event_category`,
+        event_label = `customEvent:event_label`
+      ) |>
+      dplyr::filter(event_category != "(not set)" & !(event_label %in% c("(not set)", ""))),
     error = function(e) {
       data.frame(
         property_id = NA,
         date = NA,
-        totalUsers = NA,
-        screenPageViews = NA,
-        sessions = NA
+        event_category = NA,
+        event_label = NA,
+        eventCount = NA
       )
     }
   )
@@ -139,13 +126,22 @@ account_list <- ga_account_list(type = "ga4")
 
 result_list <- lapply(
   account_list$propertyId,
-  ga_daily_dashboard_a,
+  ga_custom_event,
   changes_since = changes_since
 )
 
 latest_data <- dplyr::bind_rows(result_list) |>
   dplyr::arrange(desc(date)) |>
   tidyr::drop_na()
+
+# COMMAND ----------
+
+# DBTITLE 1,Cell 5
+if (nrow(latest_data) > 0) {
+  display(latest_data)
+} else {
+  message("No data returned - all GA4 API calls failed or returned NA rows.")
+}
 
 # COMMAND ----------
 
