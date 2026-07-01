@@ -211,4 +211,5 @@ dbExecute(
 print_changes_summary(temp_table_data, previous_data)
 
 # Clear out the rubbish
+rm(list = ls())
 gc()

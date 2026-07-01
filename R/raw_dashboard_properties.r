@@ -50,4 +50,5 @@ if (is_databricks()) {
 }
 
 # Clear out the rubbish
+rm(list = ls())
 gc()
