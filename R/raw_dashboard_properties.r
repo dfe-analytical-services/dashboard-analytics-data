@@ -49,3 +49,5 @@ if (is_databricks()) {
   )
 }
 
+# Clear out the rubbish
+gc()
