@@ -15,7 +15,7 @@ lapply(packages, library, character.only = TRUE)
 # COMMAND ----------
 
 # DBTITLE 1,Read app-reference.csv and write to ga4_app_reference table
-here::i_am("R/raw_app_reference.r")
+here::i_am("R/app_dashboard_reference.r")
 source(here::here("R/utils.R"))
 
 app_reference <- read.csv(
