@@ -63,10 +63,6 @@ if (nrow(missing_properties) > 0) {
 
 # COMMAND ----------
 
-display(ga_properties)
-
-# COMMAND ----------
-
 # DBTITLE 1,Write to dashboard_property_reference
 reference_table <- app_reference |>
   dplyr::left_join(
