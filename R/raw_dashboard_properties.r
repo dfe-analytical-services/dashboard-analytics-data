@@ -51,3 +51,7 @@ if (is_databricks()) {
     overwrite = TRUE
   )
 }
+
+# Clear out the rubbish
+rm(list = ls())
+gc()
