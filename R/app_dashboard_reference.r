@@ -22,7 +22,8 @@ app_reference <- read.csv(
   here::here("data/app-reference.csv"),
   stringsAsFactors = FALSE
 ) |>
-  dplyr::mutate(property_id = as.character(property_id))
+  dplyr::mutate(property_id = as.character(property_id)) |>
+  dplyr::select(-property_name)  # Remove property_name
 
 message("Loaded ", nrow(app_reference), " rows from data/app-reference.csv")
 print(app_reference)
