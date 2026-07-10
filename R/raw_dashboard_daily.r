@@ -33,7 +33,7 @@ source(here("R/utils.R"))
 
 table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_daily"
 
-run_id     <- paste0("daily_", format(Sys.time(), "%Y%m%d_%H%M%S"))
+run_id <- paste0("daily_", format(Sys.time(), "%Y%m%d_%H%M%S"))
 start_time <- Sys.time()
 
 # COMMAND ----------
@@ -56,8 +56,13 @@ sql_create_table <- paste(
 
 conn <- connect_databricks()
 setup_log_table(conn)
-log_run_event(conn, run_id, "raw_dashboard_daily", "started",
-  message_text = "Notebook started")
+log_run_event(
+  conn,
+  run_id,
+  "raw_dashboard_daily",
+  "started",
+  message_text = "Notebook started"
+)
 
 DBI::dbExecute(conn, sql_create_table)
 
@@ -100,7 +105,11 @@ if (!is.Date(changes_since) || !is.Date(changes_to)) {
 
 # Early exit if data is already current
 if (changes_to < changes_since) {
-  stop("Data is already up to date (latest ingested: ", as.character(changes_since - 1), "). No new records to process.")
+  stop(
+    "Data is already up to date (latest ingested: ",
+    as.character(changes_since - 1),
+    "). No new records to process."
+  )
 }
 
 # COMMAND ----------
@@ -125,7 +134,12 @@ ga_daily_dashboard_a <- function(property_id, changes_since) {
       dplyr::mutate(property_id = property_id) |>
       dplyr::relocate(property_id, .before = date),
     error = function(e) {
-      message("WARNING: Failed to fetch data for property ", property_id, ": ", conditionMessage(e))
+      message(
+        "WARNING: Failed to fetch data for property ",
+        property_id,
+        ": ",
+        conditionMessage(e)
+      )
       data.frame(
         property_id = NA,
         date = NA,
@@ -145,20 +159,43 @@ result_list <- lapply(
   changes_since = changes_since
 )
 
-failed_properties <- sum(sapply(result_list, function(x) any(is.na(x$property_id))))
+failed_properties <- sum(sapply(result_list, function(x) {
+  any(is.na(x$property_id))
+}))
 total_properties <- length(account_list$propertyId)
 
 if (failed_properties > 0) {
-  message("WARNING: ", failed_properties, " of ", total_properties, " properties failed to fetch data and will be excluded.")
-  log_run_event(conn, run_id, "raw_dashboard_daily", "warning",
-    message_text      = paste(failed_properties, "of", total_properties, "properties failed to return data"),
-    properties_total  = total_properties,
+  message(
+    "WARNING: ",
+    failed_properties,
+    " of ",
+    total_properties,
+    " properties failed to fetch data and will be excluded."
+  )
+  log_run_event(
+    conn,
+    run_id,
+    "raw_dashboard_daily",
+    "warning",
+    message_text = paste(
+      failed_properties,
+      "of",
+      total_properties,
+      "properties failed to return data"
+    ),
+    properties_total = total_properties,
     properties_failed = failed_properties
   )
 }
 
 if (failed_properties / total_properties > 0.5) {
-  stop("More than 50% of properties (", failed_properties, "/", total_properties, ") failed to return data. Stopping to prevent writing incomplete data.")
+  stop(
+    "More than 50% of properties (",
+    failed_properties,
+    "/",
+    total_properties,
+    ") failed to return data. Stopping to prevent writing incomplete data."
+  )
 }
 
 latest_data <- dplyr::bind_rows(result_list) |>
@@ -185,8 +222,13 @@ updated_data <- rbind(previous_data, latest_data) |>
 # DBTITLE 1,Quick data integrity checks
 # Non-critical: row count growth check (can legitimately not grow on low-activity days)
 if (nrow(updated_data) <= nrow(previous_data)) {
-  warning("Row count did not increase after update (previous: ", nrow(previous_data),
-          ", updated: ", nrow(updated_data), "). This may be expected on low-activity days.")
+  warning(
+    "Row count did not increase after update (previous: ",
+    nrow(previous_data),
+    ", updated: ",
+    nrow(updated_data),
+    "). This may be expected on low-activity days."
+  )
 }
 
 # Critical: no duplicate rows - stop if this fails
@@ -196,8 +238,13 @@ test_that("New data has no duplicate rows", {
 
 # Non-critical: latest date (GA4 can have processing delays)
 if (updated_data$date[1] != changes_to) {
-  warning("Latest date in data (", as.character(updated_data$date[1]), ") does not match expected (",
-          as.character(changes_to), "). GA4 data may have a processing delay.")
+  warning(
+    "Latest date in data (",
+    as.character(updated_data$date[1]),
+    ") does not match expected (",
+    as.character(changes_to),
+    "). GA4 data may have a processing delay."
+  )
 }
 
 # Critical: no missing values - stop if this fails
@@ -233,23 +280,41 @@ backup_table <- paste0(table_name, "_backup")
 dbExecute(conn, paste0("DROP TABLE IF EXISTS ", backup_table))
 dbExecute(conn, paste0("ALTER TABLE ", table_name, " RENAME TO ", backup_table))
 
-tryCatch({
-  dbExecute(conn, paste0("ALTER TABLE ", table_name, "_temp RENAME TO ", table_name))
-  dbExecute(conn, paste0("DROP TABLE IF EXISTS ", backup_table))
-}, error = function(e) {
-  message("ERROR: Failed to rename temp table. Restoring original data from backup.")
-  dbExecute(conn, paste0("ALTER TABLE ", backup_table, " RENAME TO ", table_name))
-  stop("Table swap failed and original data was restored. Error: ", conditionMessage(e))
-})
+tryCatch(
+  {
+    dbExecute(
+      conn,
+      paste0("ALTER TABLE ", table_name, "_temp RENAME TO ", table_name)
+    )
+    dbExecute(conn, paste0("DROP TABLE IF EXISTS ", backup_table))
+  },
+  error = function(e) {
+    message(
+      "ERROR: Failed to rename temp table. Restoring original data from backup."
+    )
+    dbExecute(
+      conn,
+      paste0("ALTER TABLE ", backup_table, " RENAME TO ", table_name)
+    )
+    stop(
+      "Table swap failed and original data was restored. Error: ",
+      conditionMessage(e)
+    )
+  }
+)
 
-log_run_event(conn, run_id, "raw_dashboard_daily", "success",
-  message_text      = "Daily data updated successfully",
-  rows_added        = nrow(updated_data) - nrow(previous_data),
-  date_from         = as.character(changes_since),
-  date_to           = as.character(changes_to),
-  properties_total  = total_properties,
+log_run_event(
+  conn,
+  run_id,
+  "raw_dashboard_daily",
+  "success",
+  message_text = "Daily data updated successfully",
+  rows_added = nrow(updated_data) - nrow(previous_data),
+  date_from = as.character(changes_since),
+  date_to = as.character(changes_to),
+  properties_total = total_properties,
   properties_failed = failed_properties,
-  duration_seconds  = as.double(difftime(Sys.time(), start_time, units = "secs"))
+  duration_seconds = as.double(difftime(Sys.time(), start_time, units = "secs"))
 )
 
 print_changes_summary(temp_table_data, previous_data)
