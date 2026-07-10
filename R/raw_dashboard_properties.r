@@ -1,6 +1,6 @@
 # Databricks notebook source
 # DBTITLE 1,Install and load dependencies
-# COMMAND
+# COMMAND ----------
 
 here::i_am("R/raw_dashboard_properties.r")
 source(here::here("R/params.R"))
@@ -105,7 +105,3 @@ tryCatch(
     stop(e)
   }
 )
-
-# Clear out the rubbish
-rm(list = ls())
-gc()
