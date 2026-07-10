@@ -18,7 +18,10 @@ packages <- c(
 
 missing_packages <- setdiff(packages, rownames(installed.packages()))
 if (length(missing_packages)) {
-  message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
+  message(
+    "Installing missing packages: ",
+    paste(missing_packages, collapse = ", ")
+  )
   pak::pkg_install(missing_packages, ask = FALSE)
 } else {
   message("All packages already installed")
@@ -250,3 +253,7 @@ log_run_event(conn, run_id, "raw_dashboard_daily", "success",
 )
 
 print_changes_summary(temp_table_data, previous_data)
+
+# Clear out the rubbish
+rm(list = ls())
+gc()
