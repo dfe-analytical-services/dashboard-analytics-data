@@ -1,6 +1,7 @@
 property_id,property_name,application_type,status,date_first_published,group,team,publishing_location,publishing_slug,repo_location,repo_slug
 320388694,DfE Shiny Template,Resource,Live,,Statistics services unit,Explore education statistics platforms,public,,github/dfe-analytical-services,
 321027237,School Places Scorecards Dashboard,Data dashboard,Live,,Pupil places planning,Pupil places planning,public,,github/dfe-analytical-services,
+321219316,LEO graduate industry dashboard,Data dashboard,Live,2026-11-24,Higher education analysis division,Higher education longitudinal education outcomes,public,leo-graduate-industry-dashboard,github/dfe-analytical-services,leo-graduate-industry-dashboard
 321221956,Career pathways dashboard,Data dashboard,Live,,Skills England,Skills England,public,,github/dfe-analytical-services,
 325532095,Local skills dashboard,Data dashboard,Live,,Skills England,Skills England,public,,github/dfe-analytical-services,
 329562708,NEET LA Scorecards,Data dashboard,Live,,NEET and Attainment Statistics,Post 16 Participation,public,,github/dfe-analytical-services,
@@ -12,7 +13,7 @@ property_id,property_name,application_type,status,date_first_published,group,tea
 337963854,KS5 Attainment and Single Year Entries,Data dashboard,Live,,Attainment and performance statistics,16-18 Accountability Data and Development,public,,github/dfe-analytical-services,
 337973867,KS4 Ready Reckoner,Data dashboard,Live,,Attainment and performance statistics,11-16 Accountability Data and Development Team,public,,github/dfe-analytical-services,
 340733184,KS5 Transition Matrices,Data dashboard,Live,,Attainment and performance statistics,16-18 Accountability Data and Development,public,,github/dfe-analytical-services,
-341787609,"LEO - Post-16 education and labour market activities, pathways and outcomes",Data dashboard,Live,,Central research division,LEO Strategic Analysis,public,,github/dfe-analytical-services,
+341787609,"LEO - Post-16 education and labour market activities, pathways and outcomes",Data dashboard,Live,,Central research division,LEOï¿½Strategic Analysis,public,,github/dfe-analytical-services,
 352981413,EES Data Screener,Resource,Live,,Statistics services unit,Explore education statistics platforms,internal,,github/dfe-analytical-services,
 352993849,Education Statistics Briefing Tool,Data dashboard,Live,,Statistics services unit,Statistics HoP office,internal,,,
 352996665,Ministerial Briefing,Resource,Live,,Statistics services unit,Statistics HoP office,internal,,,
@@ -41,4 +42,4 @@ property_id,property_name,application_type,status,date_first_published,group,tea
 530617374,Ask Frederick,Resource,Live,,Statistics services unit,Statistics services unit,internal,,,
 532891639,English and Maths Progress Matrix,Data dashboard,Live,,Attainment and performance statistics,11-16 Accountability Data and Development Team,public,,github/dfe-analytical-services,
 533049770,Teacher workforce analysis dashboard,Data dashboard,Live,,Teacher analysis division,Teacher Workforce Model & Allocations Team,public,,github/dfe-analytical-services,
-543055271,HE widening participation,Data dashboard,In development,09/07/2026,Higher Education Statistics and Resesarch Unit,Higher Education Statistics and Resesarch Unit,public,,github/dfe-analytical-services,
+543055271,HE widening participation,Data dashboard,In development,2026-07-09,Higher Education Statistics and Resesarch Unit,Higher Education Statistics and Resesarch Unit,public,,github/dfe-analytical-services,
