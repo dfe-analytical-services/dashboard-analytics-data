@@ -136,15 +136,6 @@ latest_data <- dplyr::bind_rows(result_list) |>
 
 # COMMAND ----------
 
-# DBTITLE 1,Cell 5
-if (nrow(latest_data) > 0) {
-  display(latest_data)
-} else {
-  message("No data returned - all GA4 API calls failed or returned NA rows.")
-}
-
-# COMMAND ----------
-
 # DBTITLE 1,Append new data onto old
 test_that("Col names match", {
   expect_equal(names(latest_data), names(previous_data))
