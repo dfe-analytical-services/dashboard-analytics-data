@@ -98,6 +98,82 @@ print_changes_summary <- function(new_table, old_table) {
   }
 }
 
+# ---------------------------------------------------------------------------
+# Logging helpers
+# ---------------------------------------------------------------------------
+
+LOG_TABLE <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.pipeline_run_log"
+
+# Creates the log table if it does not already exist. Call once per notebook
+# run, immediately after connect_databricks().
+setup_log_table <- function(conn) {
+  sql <- paste(
+    "CREATE TABLE IF NOT EXISTS", LOG_TABLE, "(",
+    "  run_id           STRING    COMMENT 'Unique identifier for a notebook run',",
+    "  run_timestamp    TIMESTAMP COMMENT 'When the log event was recorded',",
+    "  notebook_name    STRING    COMMENT 'Name of the notebook',",
+    "  status           STRING    COMMENT 'started | success | warning | error',",
+    "  message_text     STRING    COMMENT 'Human-readable event description',",
+    "  rows_added       INT       COMMENT 'Rows added to target table',",
+    "  date_from        STRING    COMMENT 'Start of date range processed',",
+    "  date_to          STRING    COMMENT 'End of date range processed',",
+    "  properties_total INT       COMMENT 'Total GA4 properties queried',",
+    "  properties_failed INT      COMMENT 'GA4 properties that failed',",
+    "  error_detail     STRING    COMMENT 'Full error message on failure',",
+    "  duration_seconds DOUBLE    COMMENT 'Execution duration in seconds'",
+    ") USING DELTA",
+    "COMMENT 'Structured log of pipeline run events for dashboard_analytics_data'"
+  )
+  tryCatch(
+    DBI::dbExecute(conn, sql),
+    error = function(e) message("WARNING: Could not create log table: ", conditionMessage(e))
+  )
+}
+
+# Writes one structured log entry to the pipeline_run_log table.
+# Wrapped in tryCatch so a logging failure never breaks the pipeline.
+log_run_event <- function(
+  conn,
+  run_id,
+  notebook_name,
+  status,
+  message_text     = NA_character_,
+  rows_added       = NA_integer_,
+  date_from        = NA_character_,
+  date_to          = NA_character_,
+  properties_total = NA_integer_,
+  properties_failed = NA_integer_,
+  error_detail     = NA_character_,
+  duration_seconds = NA_real_
+) {
+  log_entry <- data.frame(
+    run_id            = as.character(run_id),
+    run_timestamp     = Sys.time(),
+    notebook_name     = as.character(notebook_name),
+    status            = as.character(status),
+    message_text      = as.character(message_text),
+    rows_added        = as.integer(rows_added),
+    date_from         = as.character(date_from),
+    date_to           = as.character(date_to),
+    properties_total  = as.integer(properties_total),
+    properties_failed = as.integer(properties_failed),
+    error_detail      = as.character(error_detail),
+    duration_seconds  = as.double(duration_seconds),
+    stringsAsFactors  = FALSE
+  )
+  tryCatch({
+    if (is_databricks()) {
+      log_df <- sparklyr::copy_to(conn, log_entry, overwrite = TRUE)
+      sparklyr::spark_write_table(log_df, LOG_TABLE, mode = "append")
+    } else {
+      DBI::dbWriteTable(conn, LOG_TABLE, log_entry, append = TRUE)
+    }
+    message("LOG [", status, "] ", notebook_name, ": ", message_text)
+  }, error = function(e) {
+    message("WARNING: Failed to write log entry: ", conditionMessage(e))
+  })
+}
+
 # Temporary second function for notebooks making more use of sdf dataframes
 # Eventually should migrate all notebooks to match raw_search_console and use this, removing original function above
 sdf_print_changes_summary <- function(new_table, old_table) {
