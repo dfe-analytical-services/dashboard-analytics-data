@@ -10,7 +10,8 @@ packages <- c(
   "arrow",
   "here",
   "sparklyr",
-  "dplyr"
+  "dplyr",
+  "dfeR"
 )
 
 missing_packages <- setdiff(packages, rownames(installed.packages()))
@@ -156,7 +157,21 @@ updated_data <- latest_data
 
 updated_data <- rbind(previous_data, latest_data) |>
   dplyr::arrange(desc(date)) |>
-  tidyr::drop_na()
+  tidyr::drop_na() |>
+  dplyr::mutate(
+    event_class = dplyr::case_when(
+      event_category == "navbar click" ~ "Top Level Interaction",
+      event_category == "tap panel clicks" ~ "Mid Level Interaction",
+      event_category %in% c("Choose Area", "geography") |
+        grepl("^geographic_breakdown", event_category) |
+        event_label %in% c(
+          dfeR::fetch_regions()$region_name,
+          dfeR::fetch_las()$la_name,
+          dfeR::fetch_lads()$lad_name
+        ) ~ "Geography",
+      TRUE ~ "Other"
+    )
+  )
 
 # COMMAND ----------
 
