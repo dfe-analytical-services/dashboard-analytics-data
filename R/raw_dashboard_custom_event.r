@@ -10,8 +10,7 @@ packages <- c(
   "arrow",
   "here",
   "sparklyr",
-  "dplyr",
-  "dfeR"
+  "dplyr"
 )
 
 missing_packages <- setdiff(packages, rownames(installed.packages()))
@@ -101,7 +100,11 @@ ga_custom_event <- function(property_id, changes_since) {
       property_id,
       date_range = c(changes_since, changes_to),
       metrics = c("eventCount"),
-      dimensions = c("date", "customEvent:event_category", "customEvent:event_label"),
+      dimensions = c(
+        "date",
+        "customEvent:event_category",
+        "customEvent:event_label"
+      ),
       limit = -1
     ) |>
       dplyr::mutate(property_id = property_id) |>
@@ -110,7 +113,9 @@ ga_custom_event <- function(property_id, changes_since) {
         event_category = `customEvent:event_category`,
         event_label = `customEvent:event_label`
       ) |>
-      dplyr::filter(event_category != "(not set)" & !(event_label %in% c("(not set)", ""))),
+      dplyr::filter(
+        event_category != "(not set)" & !(event_label %in% c("(not set)", ""))
+      ),
     error = function(e) {
       data.frame(
         property_id = NA,
@@ -157,21 +162,7 @@ updated_data <- latest_data
 
 updated_data <- rbind(previous_data, latest_data) |>
   dplyr::arrange(desc(date)) |>
-  tidyr::drop_na() |>
-  dplyr::mutate(
-    event_class = dplyr::case_when(
-      event_category == "navbar click" ~ "Top Level Interaction",
-      event_category == "tap panel clicks" ~ "Mid Level Interaction",
-      event_category %in% c("Choose Area", "geography") |
-        grepl("^geographic_breakdown", event_category) |
-        event_label %in% c(
-          dfeR::fetch_regions()$region_name,
-          dfeR::fetch_las()$la_name,
-          dfeR::fetch_lads()$lad_name
-        ) ~ "Geography",
-      TRUE ~ "Other"
-    )
-  )
+  tidyr::drop_na()
 
 # COMMAND ----------
 
