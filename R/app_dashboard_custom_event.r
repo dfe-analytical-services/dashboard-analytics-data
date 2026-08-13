@@ -22,29 +22,46 @@ if (length(missing_packages)) {
 }
 lapply(packages, library, character.only = TRUE)
 
-source(here("R/utils.R"))
-source(here::here("R/params.R"))
+source(here("utils.R"))
+source(here::here("params.R"))
 
-custom_event_table <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event"
-custom_event_class_table <- "catalog_40_copper_statistics_services.dashboard_analytics_app.dashboard_custom_events"
+raw_custom_events <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event"
+app_custom_events <- "catalog_40_copper_statistics_services.dashboard_analytics_app.dashboard_custom_events"
+
+# Flag to control incremental vs full refresh processing
+# Set to TRUE to reprocess all data (e.g. after updating class definitions)
+dbutils.widgets.dropdown("full_refresh", "FALSE", c("TRUE", "FALSE"), "Full Refresh")
+full_refresh_flag <- dbutils.widgets.get("full_refresh") == "TRUE"
 
 # COMMAND ----------
 
 # DBTITLE 1,Add event class column to custom events table
 conn <- connect_databricks()
 
+# Retrieve existing data from the target table
 previous_data <- (if (is_databricks()) {
-  sparklyr::sdf_sql(conn, paste("SELECT * FROM", custom_event_class_table)) %>%
+  sparklyr::sdf_sql(conn, paste("SELECT * FROM", app_custom_events)) %>%
     collect()
 } else {
-  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", custom_event_class_table))
+  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", app_custom_events))
 })
 
+# Determine date cutoff for incremental processing
+if (!full_refresh_flag && nrow(previous_data) > 0) {
+  cutoff_date <- max(as.Date(previous_data$date))
+  date_filter <- paste0(" WHERE date > '", cutoff_date, "'")
+  message(paste("Incremental mode: processing data after", cutoff_date))
+} else {
+  date_filter <- ""
+  message("Full refresh mode: processing all data")
+}
+
+# Retrieve data from the source table (filtered by cutoff date if incremental)
 ga4_raw_custom_events <- (if (is_databricks()) {
-  sparklyr::sdf_sql(conn, paste("SELECT * FROM", custom_event_table)) %>%
+  sparklyr::sdf_sql(conn, paste0("SELECT * FROM ", raw_custom_events, date_filter)) %>%
     collect()
 } else {
-  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", custom_event_table))
+  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", raw_custom_events, date_filter))
 })
 
 latest_data <- ga4_raw_custom_events |>
@@ -52,8 +69,8 @@ latest_data <- ga4_raw_custom_events |>
   tidyr::drop_na() |>
   dplyr::mutate(
     event_class = dplyr::case_when(
-      event_category == "navbar click" ~ "Top Level Navigation",
-      event_category == "tap panel clicks" ~ "Mid Level Navigation",
+      event_category == "navbar click" ~ "Top level navigation",
+      event_category == "tab panel clicks" ~ "Mid level navigation",
       event_category %in%
         c("Choose Area", "geography") |
         grepl("^geographic_breakdown", event_category) |
@@ -69,24 +86,25 @@ latest_data <- ga4_raw_custom_events |>
 
 # COMMAND ----------
 
+# DBTITLE 1,Combine and validate data
 test_that("Col names match", {
   expect_equal(names(latest_data), names(previous_data))
 })
 
-updated_data <- latest_data
+# Combine new classified data with previous data (incremental) or use all reprocessed data (full refresh)
+if (full_refresh_flag) {
+  updated_data <- latest_data
+} else {
+  updated_data <- dplyr::bind_rows(previous_data, latest_data) |>
+    dplyr::distinct() |>
+    dplyr::arrange(desc(date))
+}
 
 # COMMAND ----------
 
 # DBTITLE 1,Quick data integrity checks
-reference_dates <- data.frame(
-  latest_date = as.Date(Sys.Date() - 2), # doing this to make sure the data is complete when we request it
-  stringsAsFactors = FALSE
-)
-
-changes_to <- as.Date(reference_dates$latest_date)
-
-test_that("New data has more rows than previous data", {
-  expect_true(nrow(updated_data) > nrow(previous_data))
+test_that("New data has at least as many rows as previous data", {
+  expect_true(nrow(updated_data) >= nrow(previous_data))
 })
 
 test_that("New data has no duplicate rows", {
@@ -94,7 +112,7 @@ test_that("New data has no duplicate rows", {
 })
 
 test_that("Latest date is as expected", {
-  expect_equal(as.Date(updated_data$date[1]), changes_to)
+  expect_equal(as.Date(updated_data$date[1]), as.Date(Sys.Date() - 2))
 })
 
 test_that("Data has no missing values", {
@@ -110,13 +128,13 @@ ga4_df <- copy_to(conn, updated_data, overwrite = TRUE)
 if (is_databricks()) {
   spark_write_table(
     ga4_df,
-    paste0(custom_event_class_table, "_temp"),
+    paste0(app_custom_events, "_temp"),
     mode = "overwrite"
   )
 } else {
   dbWriteTable(
     conn,
-    paste0(custom_event_class_table, "_temp"),
+    paste0(app_custom_events, "_temp"),
     ga4_df,
     overwrite = TRUE
   )
@@ -125,13 +143,13 @@ if (is_databricks()) {
 temp_table_data <- if (is_databricks()) {
   sparklyr::sdf_sql(
     conn,
-    paste0("SELECT * FROM ", custom_event_class_table, "_temp")
+    paste0("SELECT * FROM ", app_custom_events, "_temp")
   ) %>%
     collect()
 } else {
   DBI::dbGetQuery(
     conn,
-    paste0("SELECT * FROM ", custom_event_class_table, "_temp")
+    paste0("SELECT * FROM ", app_custom_events, "_temp")
   )
 }
 
@@ -140,14 +158,14 @@ test_that("Temp table data matches updated data", {
 })
 
 # Replace the old table with the new one
-dbExecute(conn, paste0("DROP TABLE IF EXISTS ", custom_event_class_table))
+dbExecute(conn, paste0("DROP TABLE IF EXISTS ", app_custom_events))
 dbExecute(
   conn,
   paste0(
     "ALTER TABLE ",
-    custom_event_class_table,
+    app_custom_events,
     "_temp RENAME TO ",
-    custom_event_class_table
+    app_custom_events
   )
 )
 
