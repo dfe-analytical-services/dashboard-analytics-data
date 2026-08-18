@@ -30,8 +30,13 @@ app_custom_events <- "catalog_40_copper_statistics_services.dashboard_analytics_
 
 # Flag to control incremental vs full refresh processing
 # Set to TRUE to reprocess all data (e.g. after updating class definitions)
-dbutils.widgets.dropdown("full_refresh", "FALSE", c("TRUE", "FALSE"), "Full Refresh")
-full_refresh_flag <- dbutils.widgets.get("full_refresh") == "TRUE"
+if (is_databricks()) {
+  dbutils.widgets.dropdown("full_refresh", "FALSE", c("TRUE", "FALSE"), "Full Refresh")
+  full_refresh_flag <- dbutils.widgets.get("full_refresh") == "TRUE"
+} else {
+  # You'll need to either run Sys.setenv(FULL_REFRESH = "TRUE") on Positron, or add FULL_REFRESH=TRUE to a .Renviron file
+  full_refresh_flag <- as.logical(Sys.getenv("FULL_REFRESH", "FALSE"))
+}
 
 # COMMAND ----------
 
