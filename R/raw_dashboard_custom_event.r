@@ -1,5 +1,15 @@
 # Databricks notebook source
 # DBTITLE 1,Install and load dependencies
+# The params file sets the preferred CRAN mirror for installing packages.
+# It's recommended that the here package is pre-installed on the cluster being
+# used to run this code, but the following code will attempt to install it if not 
+# already available.
+# Also, the pak package needs to be available.
+if (length(setdiff(c("here", "pak"), rownames(installed.packages())))) {
+   install.packages(setdiff(c("here", "pak"), rownames(installed.packages())))
+}
+source(here::here("R/params.R"))
+
 packages <- c(
   "googleAnalyticsR",
   "googleAuthR",
@@ -23,7 +33,6 @@ lapply(packages, library, character.only = TRUE)
 
 here::i_am("R/raw_dashboard_properties.r")
 source(here("R/utils.R"))
-source(here::here("R/params.R"))
 
 
 table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event"
@@ -133,15 +142,6 @@ result_list <- lapply(
 latest_data <- dplyr::bind_rows(result_list) |>
   dplyr::arrange(desc(date)) |>
   tidyr::drop_na()
-
-# COMMAND ----------
-
-# DBTITLE 1,Cell 5
-if (nrow(latest_data) > 0) {
-  display(latest_data)
-} else {
-  message("No data returned - all GA4 API calls failed or returned NA rows.")
-}
 
 # COMMAND ----------
 

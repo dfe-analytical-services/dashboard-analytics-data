@@ -1,7 +1,13 @@
 # Databricks notebook source
 # DBTITLE 1,Install and load dependencies
-
-here::i_am("R/raw_dashboard_properties.r")
+# The params file sets the preferred CRAN mirror for installing packages.
+# It's recommended that the here package is pre-installed on the cluster being
+# used to run this code, but the following code will attempt to install it if not 
+# already available.
+# Also, the pak package needs to be available.
+if (length(setdiff(c("here", "pak"), rownames(installed.packages())))) {
+   install.packages(setdiff(c("here", "pak"), rownames(installed.packages())))
+}
 source(here::here("R/params.R"))
 
 packages <- c(
@@ -29,8 +35,8 @@ if (length(missing_packages)) {
 }
 lapply(packages, library, character.only = TRUE)
 
+here::i_am("R/raw_dashboard_properties.r")
 source(here("R/utils.R"))
-
 
 table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_daily"
 
@@ -46,15 +52,7 @@ if (is_databricks()) {
 # COMMAND ----------
 
 # DBTITLE 1,Check for latest date from existing data
-sql_create_table <- paste(
-  "CREATE TABLE IF NOT EXISTS",
-  table_name,
-  "(date DATE, users DOUBLE, pageviews DOUBLE, sessions DOUBLE)"
-)
-
 conn <- connect_databricks()
-
-DBI::dbExecute(conn, sql_create_table)
 
 last_date <- if (is_databricks()) {
   sparklyr::sdf_sql(conn, paste("SELECT MAX(date) FROM", table_name)) %>%
@@ -76,14 +74,10 @@ if (is.na(last_date)) {
   last_date <- "2022-02-02"
 }
 
-create_dates <- function(run_date = Sys.Date()) {
-  data.frame(
-    latest_date = as.Date(run_date),
-    stringsAsFactors = FALSE
-  )
-}
-
-reference_dates <- create_dates(Sys.Date() - 2) # doing this to make sure the data is complete when we request it
+reference_dates <- data.frame(
+  latest_date = as.Date(Sys.Date() - 2), # doing this to make sure the data is complete when we request it
+  stringsAsFactors = FALSE
+)
 
 changes_since <- as.Date(last_date) + 1
 changes_to <- as.Date(reference_dates$latest_date)
