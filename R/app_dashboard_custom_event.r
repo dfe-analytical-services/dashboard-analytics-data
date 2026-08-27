@@ -22,8 +22,9 @@ if (length(missing_packages)) {
 }
 lapply(packages, library, character.only = TRUE)
 
-source(here("utils.R"))
-source(here::here("params.R"))
+here::i_am("R/app_dashboard_custom_event.r")
+source(here::here("R/utils.R"))
+source(here::here("R/params.R"))
 
 raw_custom_events <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event"
 app_custom_events <- "catalog_40_copper_statistics_services.dashboard_analytics_app.dashboard_custom_events"
@@ -43,13 +44,30 @@ if (is_databricks()) {
 # DBTITLE 1,Add event class column to custom events table
 conn <- connect_databricks()
 
-# Retrieve existing data from the target table
-previous_data <- (if (is_databricks()) {
-  sparklyr::sdf_sql(conn, paste("SELECT * FROM", app_custom_events)) %>%
-    collect()
-} else {
-  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", app_custom_events))
-})
+# Attempt to retrieve existing data from the target table
+previous_data <- tryCatch(
+  {
+    if (is_databricks()) {
+      sparklyr::sdf_sql(conn, paste("SELECT * FROM", app_custom_events)) %>%
+        collect()
+    } else {
+      DBI::dbGetQuery(conn, paste0("SELECT * FROM ", app_custom_events))
+    }
+  },
+  error = function(e) {
+    NULL
+  }
+)
+
+# If the target table doesn't exist yet, force a full refresh
+if (is.null(previous_data)) {
+  warning(
+    "Target table '", app_custom_events, "' does not exist. ",
+    "Forcing full refresh mode for initial load."
+  )
+  full_refresh_flag <- TRUE
+  previous_data <- data.frame()
+}
 
 # Determine date cutoff for incremental processing
 if (!full_refresh_flag && nrow(previous_data) > 0) {
@@ -68,6 +86,15 @@ ga4_raw_custom_events <- (if (is_databricks()) {
 } else {
   DBI::dbGetQuery(conn, paste0("SELECT * FROM ", raw_custom_events, date_filter))
 })
+
+# Validate that the source query returned data before continuing
+if (nrow(ga4_raw_custom_events) == 0) {
+  stop(
+    "No data returned from source table. ",
+    if (date_filter != "") paste0("No new records found since cutoff date ", cutoff_date, ".")
+    else "Source table appears to be empty."
+  )
+}
 
 latest_data <- ga4_raw_custom_events |>
   dplyr::arrange(desc(date)) |>
@@ -92,9 +119,12 @@ latest_data <- ga4_raw_custom_events |>
 # COMMAND ----------
 
 # DBTITLE 1,Combine and validate data
-test_that("Col names match", {
-  expect_equal(names(latest_data), names(previous_data))
-})
+# Only check column names if previous data exists (skip on first run)
+if (nrow(previous_data) > 0) {
+  test_that("Col names match", {
+    expect_equal(names(latest_data), names(previous_data))
+  })
+}
 
 # Combine new classified data with previous data (incremental) or use all reprocessed data (full refresh)
 if (full_refresh_flag) {
