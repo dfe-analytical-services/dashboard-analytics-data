@@ -75,14 +75,15 @@ test_that("Query dates are valid", {
   expect_true(grepl("\\d{4}-\\d{2}-\\d{2}", as.character(changes_since)))
   expect_true(is.Date(changes_to))
   expect_true(grepl("\\d{4}-\\d{2}-\\d{2}", as.character(changes_to)))
-
-  if (changes_to < changes_since) {
-    # Exit the notebook early
-    dbutils.notebook.exit(
-      "Data is up to date, skipping the rest of the notebook"
-    )
-  }
 })
+
+if (changes_to < changes_since) {
+  if (is_databricks()) {
+    dbutils.notebook.exit("Data is up to date, skipping the rest of the notebook")
+  } else {
+    stop("Data is up to date, skipping the rest of the notebook")
+  }
+}
 
 # COMMAND ----------
 
@@ -100,7 +101,11 @@ ga_custom_event <- function(property_id, changes_since) {
       property_id,
       date_range = c(changes_since, changes_to),
       metrics = c("eventCount"),
-      dimensions = c("date", "customEvent:event_category", "customEvent:event_label"),
+      dimensions = c(
+        "date",
+        "customEvent:event_category",
+        "customEvent:event_label"
+      ),
       limit = -1
     ) |>
       dplyr::mutate(property_id = property_id) |>
@@ -109,7 +114,9 @@ ga_custom_event <- function(property_id, changes_since) {
         event_category = `customEvent:event_category`,
         event_label = `customEvent:event_label`
       ) |>
-      dplyr::filter(event_category != "(not set)" & !(event_label %in% c("(not set)", ""))),
+      dplyr::filter(
+        event_category != "(not set)" & !(event_label %in% c("(not set)", ""))
+      ),
     error = function(e) {
       data.frame(
         property_id = NA,
