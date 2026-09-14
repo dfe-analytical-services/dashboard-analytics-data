@@ -32,7 +32,7 @@ if (length(missing_packages)) {
 lapply(packages, library, character.only = TRUE)
 
 here::i_am("R/raw_dashboard_properties.r")
-source(here("R/utils.R"))
+source(here::here("R/utils.R"))
 
 
 table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event"
