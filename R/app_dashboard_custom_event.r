@@ -117,6 +117,7 @@ latest_data <- ga4_raw_custom_events |>
     event_class = dplyr::case_when(
       tolower(event_category) %in% c("navbar click", "service navigation") ~ "Top level navigation",
       tolower(event_category) == "tab panel clicks" |
+        grepl("Domain selection", event_category, ignore.case = TRUE) |
         grepl("Domain selection", event_label, ignore.case = TRUE) ~ "Mid level navigation",
       tolower(event_category) == "choose area" &
         (grepl("\\bLSIP\\b", event_label, ignore.case = TRUE) |
@@ -151,10 +152,6 @@ if (full_refresh_flag) {
     dplyr::distinct() |>
     dplyr::arrange(desc(date))
 }
-
-# COMMAND ----------
-
-display(latest_data)
 
 # COMMAND ----------
 
