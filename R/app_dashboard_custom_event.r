@@ -118,7 +118,9 @@ latest_data <- ga4_raw_custom_events |>
       tolower(event_category) %in% c("navbar click", "service navigation") ~ "Top level navigation",
       tolower(event_category) == "tab panel clicks" |
         grepl("Domain selection", event_category, ignore.case = TRUE) |
-        grepl("Domain selection", event_label, ignore.case = TRUE) ~ "Mid level navigation",
+        grepl("Domain selection", event_label, ignore.case = TRUE) |
+        grepl("accordion", event_category, ignore.case = TRUE) |
+        grepl("domain click", event_category, ignore.case = TRUE) ~ "Mid level navigation",
       tolower(event_category) == "choose area" &
         (grepl("\\bLSIP\\b", event_label, ignore.case = TRUE) |
           grepl("\\bCA\\b", event_label, ignore.case = TRUE) |
