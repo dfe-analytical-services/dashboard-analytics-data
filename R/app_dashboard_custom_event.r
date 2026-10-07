@@ -96,6 +96,19 @@ if (nrow(ga4_raw_custom_events) == 0) {
   )
 }
 
+# Build geography lookup from dfeR for reuse
+geography_names <- c(
+  dfeR::fetch_regions()$region_name,
+  dfeR::fetch_las()$la_name,
+  dfeR::fetch_lads()$lad_name
+)
+# PCRE pattern for substring matching
+geography_pattern <- paste0(
+  "(",
+  paste(paste0("\\Q", geography_names, "\\E"), collapse = "|"),
+  ")"
+)
+
 latest_data <- ga4_raw_custom_events |>
   dplyr::arrange(desc(date)) |>
   tidyr::drop_na() |>
@@ -105,16 +118,17 @@ latest_data <- ga4_raw_custom_events |>
       tolower(event_category) %in% c("navbar click", "service navigation") ~ "Top level navigation",
       tolower(event_category) == "tab panel clicks" |
         grepl("Domain selection", event_label, ignore.case = TRUE) ~ "Mid level navigation",
-      tolower(event_category) %in%
-        c("choose area", "geography") |
+      tolower(event_category) == "choose area" &
+        (grepl("\\bLSIP\\b", event_label, ignore.case = TRUE) |
+          grepl("\\bCA\\b", event_label, ignore.case = TRUE) |
+          grepl("\\bLADU\\b", event_label, ignore.case = TRUE) |
+          tolower(trimws(event_label)) == "england" |
+          grepl(geography_pattern, event_label, ignore.case = TRUE, perl = TRUE)) ~ "Geography",
+      tolower(event_category) == "choose area" ~ "Other",
+      tolower(event_category) == "geography" |
         grepl("^geographic_breakdown", event_category, ignore.case = TRUE) |
         grepl("National", event_label, ignore.case = TRUE) |
-        tolower(event_label) %in%
-          tolower(c(
-            dfeR::fetch_regions()$region_name,
-            dfeR::fetch_las()$la_name,
-            dfeR::fetch_lads()$lad_name
-          )) ~ "Geography",
+        tolower(event_label) %in% tolower(geography_names) ~ "Geography",
       TRUE ~ "Other"
     )
   )
@@ -137,6 +151,10 @@ if (full_refresh_flag) {
     dplyr::distinct() |>
     dplyr::arrange(desc(date))
 }
+
+# COMMAND ----------
+
+display(latest_data)
 
 # COMMAND ----------
 
