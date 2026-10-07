@@ -100,18 +100,21 @@ latest_data <- ga4_raw_custom_events |>
   dplyr::arrange(desc(date)) |>
   tidyr::drop_na() |>
   dplyr::mutate(
+    event_label = gsub("_", " ", event_label),
     event_class = dplyr::case_when(
-      event_category == "navbar click" ~ "Top level navigation",
-      event_category == "tab panel clicks" ~ "Mid level navigation",
-      event_category %in%
-        c("Choose Area", "geography") |
-        grepl("^geographic_breakdown", event_category) |
-        event_label %in%
-          c(
+      tolower(event_category) %in% c("navbar click", "service navigation") ~ "Top level navigation",
+      tolower(event_category) == "tab panel clicks" |
+        grepl("Domain selection", event_label, ignore.case = TRUE) ~ "Mid level navigation",
+      tolower(event_category) %in%
+        c("choose area", "geography") |
+        grepl("^geographic_breakdown", event_category, ignore.case = TRUE) |
+        grepl("National", event_label, ignore.case = TRUE) |
+        tolower(event_label) %in%
+          tolower(c(
             dfeR::fetch_regions()$region_name,
             dfeR::fetch_las()$la_name,
             dfeR::fetch_lads()$lad_name
-          ) ~ "Geography",
+          )) ~ "Geography",
       TRUE ~ "Other"
     )
   )
