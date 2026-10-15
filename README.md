@@ -1,120 +1,165 @@
 # dashboard-analytics-data
-Pipeline to import dashboard analytics data from Google Analytics (GA4) into Unity Catalog for the dashboard analytics app.
 
-# Summary of repo
+Pipeline to import dashboard analytics data from Google Analytics 4 (GA4) into Unity Catalog for the [dashboard-analytics-devops](https://dev.azure.com/dfe-gov-uk/stats-development/_git/dashboard-analytics-devops) R Shiny app.
+
+## Summary
 
 This repo contains R notebooks and helper scripts that:
 
-* pull GA4 property, daily sessions, and custom event data into raw tables
+* pull GA4 property metadata, daily session metrics, and custom event data into raw tables
 * transform raw custom events into app-ready event classes
-* combine hand-maintained dashboard metadata from `data/app-reference.csv` with GA property metadata for the app reference table
+* combine hand-maintained dashboard metadata (`data/app-reference.csv`) with GA property metadata for the app reference table
 
-Target catalog: `catalog_40_copper_statistics_services`
+All tables are written to the `catalog_40_copper_statistics_services` catalog across two schemas:
 
-## Description of repo files
+| Schema | Table | Populated by |
+| --- | --- | --- |
+| `dashboard_analytics_raw` | `ga4_dashboard_properties` | `raw_dashboard_properties` |
+| `dashboard_analytics_raw` | `ga4_raw_dashboard_daily` | `raw_dashboard_daily` |
+| `dashboard_analytics_raw` | `ga4_raw_dashboard_custom_event` | `raw_dashboard_custom_event` |
+| `dashboard_analytics_app` | `dashboard_property_reference` | `app_dashboard_reference` |
+| `dashboard_analytics_app` | `dashboard_custom_events` | `app_dashboard_custom_event` |
 
-**params.R**
+## Repo structure
 
-The purpose of this script is to define shared configuration used across notebooks.
+```
+dashboard-analytics-data/
+├── data/
+│   └── app-reference.csv          # Hand-maintained dashboard metadata
+├── R/
+│   ├── params.R                   # Shared configuration (catalog, schema, auth path)
+│   ├── utils.R                    # Helper functions (connection, packages, dates, logging)
+│   ├── raw_dashboard_properties   # Full refresh of GA4 property list
+│   ├── raw_dashboard_daily        # Incremental daily session metrics
+│   ├── raw_dashboard_custom_event # Incremental custom event ingestion
+│   ├── app_dashboard_reference    # Builds app reference table from CSV + properties
+│   └── app_dashboard_custom_event # Classifies custom events into event classes
+├── LICENSE                        # GPL-3.0
+└── README.md
+```
 
-Key items in the script:
+## Prerequisites
+
+* **R** (version compatible with the Databricks Runtime on the cluster)
+* **Databricks cluster** with an R-capable runtime (e.g. Runtime 15.4)
+* **GA4 service-account JSON** stored at `/Volumes/catalog_40_copper_statistics_services/dashboard_analytics_raw/ga_auth/dfe-dashboard-analytics-fd61afbed470.json`
+* **R packages** — each notebook installs its own missing packages on first run. Core dependencies: `googleAnalyticsR`, `googleAuthR`, `DBI`, `sparklyr`, `dplyr`, `testthat`, `here`, `dfeR`
+
+For local development:
+
+* [Databricks ODBC driver](https://docs.databricks.com/en/integrations/odbc/index.html)
+* Environment variables `DATABRICKS_HOST` and `DATABRICKS_CLUSTER_PATH`
+* GA4 authentication falls back to interactive OAuth when no service-account JSON is available
+
+## Getting started
+
+1. Clone this repo from [GitHub](https://github.com/dfe-analytical-services/dashboard-analytics-data).
+2. Open the repo as a Databricks Git folder, or work locally with the ODBC driver configured.
+3. To test changes, run the affected notebooks manually in the dependency order described below. Production runs are handled by the scheduled Databricks job.
+
+## How to run
+
+### Scheduled pipeline
+
+The notebooks run automatically through the **Dashboard analytics data pipeline** Databricks job:
+
+* **Schedule:** daily at 03:15 UTC
+* **Source:** the `main` branch of the Git repo, so changes take effect once merged to `main`
+* **Compute:** a shared existing cluster
+* **Notifications:** email on success, failure, and when a run exceeds one hour
+* **Concurrency:** one run at a time; further triggers are queued
+
+The job's tasks and their dependencies:
+
+| Task | Notebook | Depends on |
+| --- | --- | --- |
+| `retrieve_ga4_properties` | `R/raw_dashboard_properties` | None |
+| `retrieve_ga4_reference_data` | `R/app_dashboard_reference` | `retrieve_ga4_properties` |
+| `retrieve_ga4_daily_stats` | `R/raw_dashboard_daily` | `retrieve_ga4_properties` |
+| `retrieve_ga4_custom_events` | `R/raw_dashboard_custom_event` | `retrieve_ga4_properties` |
+| `add_custom_event_class_column` | `R/app_dashboard_custom_event` | `retrieve_ga4_custom_events` |
+
+After `retrieve_ga4_properties` finishes, the reference, daily, and custom event branches run in parallel. A task only runs if its upstream task succeeds.
+
+### Running manually
+
+To test changes or backfill outside the schedule, run the notebooks in the same dependency order: `raw_dashboard_properties` first, then any of the downstream notebooks, running `raw_dashboard_custom_event` before `app_dashboard_custom_event`.
+
+### Load behaviour
+
+Incremental notebooks fetch from the latest stored date + 1 through `Sys.Date() - 2` (a two-day lag lets GA4 data settle). On a first run with an empty table they backfill from `2022-02-02`.
+
+To reprocess all custom events after changing event-class definitions, run `app_dashboard_custom_event` manually with the `full_refresh` widget set to `TRUE` on Databricks, or set `FULL_REFRESH=TRUE` in your environment locally. The scheduled job runs with the default `FALSE`.
+
+## Detailed file descriptions
+
+### `R/params.R`
+
+Shared configuration sourced by every notebook:
 
 * `catalog`, `schema_raw`, and `auth_file`
-* a Posit Package Manager CRAN mirror setting
-* `auth_json_path`, built from `/Volumes/<catalog>/<schema_raw>/<auth_file>` except on Windows where it is set to `NULL`
+* A Posit Package Manager CRAN mirror
+* `auth_json_path`, built from `/Volumes/<catalog>/<schema_raw>/<auth_file>` (set to `NULL` on Windows)
 * `Sys.info()` output for runtime diagnostics
 
-**utils.R**
+### `R/utils.R`
 
-The purpose of this script is to provide common helper functions and configuration used across notebooks in the dashboard analytics data project.
+Common helper functions and constants:
 
-The following functions and constants are present in the script:
+* **Connection helpers:** `is_databricks()` detects the runtime environment; `connect_databricks()` returns a `sparklyr` connection on-cluster or a DBI/ODBC connection locally.
+* **Package management:** `install_if_needed()` installs packages via `pak` only if missing. `mirror_date` and `options()` pin the CRAN snapshot.
+* **Paths:** `auth_path` — hardcoded volume path to the GA service-account JSON.
+* **Date helpers:** `create_dates()` returns a named list of reference date offsets.
+* **Logging:** `print_changes_summary()` reports new rows and dates after a write. `sdf_print_changes_summary()` is the Spark DataFrame equivalent.
 
-* Connection helpers:
-  * `is_databricks()` detects whether the code is running on Databricks by checking `DATABRICKS_RUNTIME_VERSION`.
-  * `connect_databricks()` establishes a database connection using either `sparklyr` (on-cluster) or the Databricks ODBC driver (local), defaulting to the `catalog_40_copper_statistics_services` catalog.
-* Package management:
-  * `mirror_date` and `options()` pin the CRAN mirror to a specific Posit Package Manager snapshot for Ubuntu focal, with a fallback to standard CRAN.
-  * `install_if_needed()` installs one or more packages via `pak` only if they are not already present.
-* Paths and constants:
-  * `auth_path` is a hardcoded Unity Catalog volume path to the Google service account JSON credential used for GA4 authentication.
-* Date helpers:
-  * `create_dates()` returns a named list of date offsets relative to a supplied latest date.
-* Change tracking and logging:
-  * `print_changes_summary()` compares a newly fetched local R data frame against a previous snapshot and reports new row count and new dates.
-  * `sdf_print_changes_summary()` is the equivalent helper for `sparklyr` Spark DataFrames.
+### `data/app-reference.csv`
 
-**data/app-reference.csv**
+Hand-maintained dashboard metadata. Fields include `property_id`, `application_type`, `status`, `group`, `team`, `publishing_location`, and repo details. When a new GA4 property appears, add a row here before running `app_dashboard_reference`.
 
-This CSV is the hand-maintained reference file for dashboard metadata. It includes fields such as `property_id`, `application_type`, `status`, `group`, `team`, `publishing_location`, and repo metadata. `app_dashboard_reference` uses it to build the app-facing reference table and validates that every property in `ga4_dashboard_properties` exists in the CSV.
+### `R/raw_dashboard_properties`
 
-**raw_dashboard_properties**
+Full-refresh overwrite of `dashboard_analytics_raw.ga4_dashboard_properties`. Fetches the GA4 account list via `ga_account_list(type = "ga4")`, filters out the "Explore Education Statistics" account, and writes the result. Used downstream by `app_dashboard_reference`.
 
-The purpose of this notebook is to perform a full refresh of the GA4 property list in `catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_dashboard_properties`.
+### `R/raw_dashboard_daily`
 
-Flow:
+Incremental ingestion of daily metrics (`totalUsers`, `screenPageViews`, `sessions`) per property into `dashboard_analytics_raw.ga4_raw_dashboard_daily`. Authenticates, checks the latest stored date, fetches the delta from the GA4 API for every property, appends to the existing data, runs `testthat` integrity checks (row count, duplicates, latest date, missing values), and writes through a `_temp` table before replacing the production table.
 
-1. Anchors the project root with `here::i_am()`, sources `params.R`, installs missing packages with `pak`, and loads libraries.
-2. Sources `utils.R`, authenticates with `ga_auth(json_file = auth_json_path)`, fetches the GA4 account list with `ga_account_list(type = "ga4")`, filters out the "Explore Education Statistics" account, and overwrites the target table.
+### `R/raw_dashboard_custom_event`
 
-Notes:
+Incremental ingestion of custom event data into `dashboard_analytics_raw.ga4_raw_dashboard_custom_event`. Same incremental and write pattern as `raw_dashboard_daily`, but fetches `eventCount` by `date`, `event_category`, and `event_label`, and filters out `"(not set)"` / empty labels.
 
-* This notebook is a full-refresh overwrite, not an incremental load.
-* The filtered properties table is used by `app_dashboard_reference`, but the daily and custom event raw notebooks still fetch properties directly from `ga_account_list()`.
+### `R/app_dashboard_reference`
 
-**raw_dashboard_daily**
+Builds `dashboard_analytics_app.dashboard_property_reference` by joining `data/app-reference.csv` to `ga4_dashboard_properties`. Validates that every GA4 property exists in the CSV (fails if not), checks for duplicate IDs and missing property names, then overwrites the target table.
 
-The purpose of this notebook is to perform incremental daily ingestion of GA4 dashboard metrics into `catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_daily`.
+### `R/app_dashboard_custom_event`
 
-Here is how each cell functions:
+Creates `dashboard_analytics_app.dashboard_custom_events` from the raw custom event table. Supports incremental or full-refresh mode. Classifies each event into one of four classes:
 
-1. Anchors the project root, sources `params.R`, installs missing packages if needed, loads them, sources `utils.R`, and sets `table_name`.
-2. Authenticates with `ga_auth()`, using the service account path on Databricks and interactive OAuth locally.
-3. Connects via `connect_databricks()`, checks `MAX(date)` in the target table, defaults to `2022-02-02` if empty, sets `changes_since` and `changes_to`, validates both dates, and exits early if the table is already up to date.
-4. Loads the existing table into `previous_data`, defines `ga_daily_dashboard_a()` to fetch one property's metrics for the incremental range, fetches properties from `ga_account_list(type = "ga4")`, and builds `latest_data`.
-5. Checks that column names match before merging.
-6. Row-binds `previous_data` and `latest_data` into `updated_data`, sorts descending by date, and drops `NA` values.
-7. Runs four `testthat` assertions: row count increased, no duplicate rows, latest date equals `changes_to`, and no missing values.
-8. Writes `updated_data` to a `_temp` table, validates the write, replaces the production table, prints a change summary, and clears the R environment.
+* **Top level navigation** — navbar clicks, service navigation
+* **Mid level navigation** — tab panel clicks, domain selection, accordion interactions
+* **Geography** — area selections matching region, LA, or LAD names from `dfeR`
+* **Other** — everything else
 
-Dependencies:
+Writes through a `_temp` table with `testthat` validation before replacing production.
 
-* `R/params.R`
-* `R/utils.R`
-* External packages: `googleAnalyticsR`, `googleAuthR`, `DBI`, `odbc`, `testthat`, `lubridate`, `arrow`, `here`, `sparklyr`, `dplyr`
+## Contributing
 
-**raw_dashboard_custom_event**
+This repo is maintained by the Statistics Services Unit in DfE. To contribute:
 
-The purpose of this notebook is to perform incremental daily ingestion of GA4 custom event data into `catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event`.
+1. Create a feature branch from `main`.
+2. Make your changes and test by running the affected notebooks.
+3. If you add a new GA4 property, add a corresponding row to `data/app-reference.csv`.
+4. Submit a pull request on GitHub.
 
-Key differences from `raw_dashboard_daily`:
+## Where to get help
 
-* the metric is `eventCount`
-* the dimensions are `date`, `customEvent:event_category`, and `customEvent:event_label`
-* rows are filtered out where `event_category == "(not set)"` or `event_label` is `"(not set)"` or empty
+Raise an issue or question in the [GitHub repository](https://github.com/dfe-analytical-services/dashboard-analytics-data/issues).
 
-The notebook also fetches properties directly from `ga_account_list(type = "ga4")` rather than from `ga4_dashboard_properties`.
+## Related
 
-**app_dashboard_reference**
+* [dashboard-analytics-devops](https://dev.azure.com/dfe-gov-uk/stats-development/_git/dashboard-analytics-devops) — the R Shiny app that consumes these tables
 
-The purpose of this notebook is to create the app reference table `catalog_40_copper_statistics_services.dashboard_analytics_app.dashboard_property_reference` by joining `data/app-reference.csv` to `catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_dashboard_properties`.
+## Licence
 
-Flow:
-
-1. Installs and loads dependencies.
-2. Reads `data/app-reference.csv`, coerces `property_id` to character, and removes the CSV `property_name` column.
-3. Reads distinct `property_id` and `property_name` from `ga4_dashboard_properties`.
-4. Fails if any property in `ga4_dashboard_properties` is missing from the CSV.
-5. Builds the final reference table, validates duplicate IDs and missing property names, and overwrites `dashboard_property_reference`.
-
-**app_dashboard_custom_event**
-
-The purpose of this notebook is to create `catalog_40_copper_statistics_services.dashboard_analytics_app.dashboard_custom_events` from `catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event`.
-
-Key behaviour:
-
-* supports incremental processing or full refresh
-* uses a Databricks `full_refresh` widget, or local `FULL_REFRESH`, to control reprocessing
-* classifies each event into `Top level navigation`, `Mid level navigation`, `Geography`, or `Other`
-* uses `dfeR` geography names to identify geography-related labels
-* writes through a `_temp` table before replacing the production table
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
