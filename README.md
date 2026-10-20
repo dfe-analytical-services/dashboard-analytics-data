@@ -154,7 +154,7 @@ This repo is maintained by the Statistics Services Unit in DfE. To contribute:
 
 ## Related
 
-* [Dashboard Analytics Repo](https://dev.azure.com/dfe-gov-uk/stats-development/_git/dashboard-analytics-devops) — the R Shiny app that consumes these tables. This is found on Azure DevOps rather than GitHub.
+* [Dashboard Analytics Repo](https://dfe-gov-uk.visualstudio.com/stats-development/_git/dashboard-analytics) — the R Shiny app that consumes these tables. This is found on Azure DevOps rather than GitHub.
 
 ## Where to get help
 
