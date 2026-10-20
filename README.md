@@ -1,6 +1,6 @@
 # dashboard-analytics-data
 
-Pipeline to import dashboard analytics data from Google Analytics 4 (GA4) into Unity Catalog for the [dashboard-analytics-devops](https://dev.azure.com/dfe-gov-uk/stats-development/_git/dashboard-analytics-devops) R Shiny app.
+Pipeline to import dashboard analytics data from Google Analytics 4 (GA4) into Unity Catalog for the [Dashboard Analytics](https://positconnect/dashboard-analytics-dashboard/) R Shiny app.
 
 ## Summary
 
@@ -152,13 +152,13 @@ This repo is maintained by the Statistics Services Unit in DfE. To contribute:
 3. If you add a new GA4 property, add a corresponding row to `data/app-reference.csv`.
 4. Submit a pull request on GitHub.
 
-## Where to get help
-
-Raise an issue or question in the [GitHub repository](https://github.com/dfe-analytical-services/dashboard-analytics-data/issues).
-
 ## Related
 
-* [dashboard-analytics-devops](https://dev.azure.com/dfe-gov-uk/stats-development/_git/dashboard-analytics-devops) — the R Shiny app that consumes these tables
+* [Dashboard Analytics Repo](https://dev.azure.com/dfe-gov-uk/stats-development/_git/dashboard-analytics-devops) — the R Shiny app that consumes these tables. This is found on Azure DevOps rather than GitHub.
+
+## Where to get help
+
+Raise an issue or question by contacting the Explore Education Statistics team at [Explore.STATISTICS@education.gov.uk](mailto:Explore.STATISTICS@education.gov.uk).
 
 ## Licence
 
