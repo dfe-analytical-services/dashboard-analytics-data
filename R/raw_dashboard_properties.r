@@ -1,4 +1,5 @@
 # Databricks notebook source
+# DBTITLE 1,Install and load dependencies
 here::i_am("R/raw_dashboard_properties.r")
 source(here::here("R", "params.R"))
 
