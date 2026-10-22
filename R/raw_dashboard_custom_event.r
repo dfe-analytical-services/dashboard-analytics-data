@@ -103,6 +103,7 @@ ga_custom_event <- function(property_id, changes_since) {
       metrics = c("eventCount"),
       dimensions = c(
         "date",
+        "eventName",
         "customEvent:event_category",
         "customEvent:event_label"
       ),
@@ -111,6 +112,7 @@ ga_custom_event <- function(property_id, changes_since) {
       dplyr::mutate(property_id = property_id) |>
       dplyr::relocate(property_id, .before = date) |>
       dplyr::rename(
+        event_name = `eventName`,
         event_category = `customEvent:event_category`,
         event_label = `customEvent:event_label`
       ) |>
@@ -121,6 +123,7 @@ ga_custom_event <- function(property_id, changes_since) {
       data.frame(
         property_id = NA,
         date = NA,
+        event_name = NA,
         event_category = NA,
         event_label = NA,
         eventCount = NA
