@@ -23,8 +23,8 @@ if (length(missing_packages)) {
 lapply(packages, library, character.only = TRUE)
 
 here::i_am("R/app_dashboard_custom_event.r")
-source(here::here("R/utils.R"))
-source(here::here("R/params.R"))
+source(here::here("R", "utils.R"))
+source(here::here("R", "params.R"))
 
 raw_custom_events <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event"
 app_custom_events <- "catalog_40_copper_statistics_services.dashboard_analytics_app.dashboard_custom_events"
