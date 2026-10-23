@@ -2,11 +2,11 @@
 # DBTITLE 1,Install and load dependencies
 # The params file sets the preferred CRAN mirror for installing packages.
 # It's recommended that the here package is pre-installed on the cluster being
-# used to run this code, but the following code will attempt to install it if not 
+# used to run this code, but the following code will attempt to install it if not
 # already available.
 # Also, the pak package needs to be available.
 if (length(setdiff(c("here", "pak"), rownames(installed.packages())))) {
-   install.packages(setdiff(c("here", "pak"), rownames(installed.packages())))
+  install.packages(setdiff(c("here", "pak"), rownames(installed.packages())))
 }
 here::i_am("R/raw_dashboard_custom_event.r")
 source(here::here("R", "params.R"))
@@ -88,7 +88,9 @@ test_that("Query dates are valid", {
 
 if (changes_to < changes_since) {
   if (is_databricks()) {
-    dbutils.notebook.exit("Data is up to date, skipping the rest of the notebook")
+    dbutils.notebook.exit(
+      "Data is up to date, skipping the rest of the notebook"
+    )
   } else {
     stop("Data is up to date, skipping the rest of the notebook")
   }
@@ -216,8 +218,15 @@ col_list <- paste0("`", names(updated_data), "`", collapse = ", ")
 dbExecute(
   conn,
   paste0(
-    "INSERT OVERWRITE TABLE ", table_name, " (", col_list, ") ",
-    "SELECT ", col_list, " FROM ", temp_table
+    "INSERT OVERWRITE TABLE ",
+    table_name,
+    " (",
+    col_list,
+    ") ",
+    "SELECT ",
+    col_list,
+    " FROM ",
+    temp_table
   )
 )
 
