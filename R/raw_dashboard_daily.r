@@ -198,11 +198,16 @@ test_that("Temp table data matches updated data", {
   expect_equal(nrow(temp_table_data), nrow(updated_data))
 })
 
-# Replace the old table with the new one
-dbExecute(conn, paste0("DROP TABLE IF EXISTS ", table_name))
+# Replace the live table's contents in a single Delta transaction.
+# Needs only SELECT + MODIFY (no MANAGE/ownership), and keeps the table's
+# owner, grants, comments and history intact.
+col_list <- paste0("`", names(updated_data), "`", collapse = ", ")
 dbExecute(
   conn,
-  paste0("ALTER TABLE ", table_name, "_temp RENAME TO ", table_name)
+  paste0(
+    "INSERT OVERWRITE TABLE ", table_name, " (", col_list, ") ",
+    "SELECT ", col_list, " FROM ", temp_table
+  )
 )
 
 print_changes_summary(temp_table_data, previous_data)
