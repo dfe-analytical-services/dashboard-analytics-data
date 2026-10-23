@@ -2,11 +2,11 @@
 # DBTITLE 1,Install and load dependencies
 # The params file sets the preferred CRAN mirror for installing packages.
 # It's recommended that the here package is pre-installed on the cluster being
-# used to run this code, but the following code will attempt to install it if not 
+# used to run this code, but the following code will attempt to install it if not
 # already available.
 # Also, the pak package needs to be available.
 if (length(setdiff(c("here", "pak"), rownames(installed.packages())))) {
-   install.packages(setdiff(c("here", "pak"), rownames(installed.packages())))
+  install.packages(setdiff(c("here", "pak"), rownames(installed.packages())))
 }
 here::i_am("R/raw_dashboard_daily.r")
 source(here::here("R", "params.R"))
@@ -179,30 +179,43 @@ test_that("Data has no missing values", {
 
 # DBTITLE 1,Write to table
 ga4_df <- copy_to(conn, updated_data, overwrite = TRUE)
+temp_table <- paste0(table_name, "_temp")
 
 # Write to temp table while we confirm we're good to overwrite data
 if (is_databricks()) {
-  spark_write_table(ga4_df, paste0(table_name, "_temp"), mode = "overwrite")
+  spark_write_table(ga4_df, temp_table, mode = "overwrite")
 } else {
-  dbWriteTable(conn, paste0(table_name, "_temp"), ga4_df, overwrite = TRUE)
+  dbWriteTable(conn, temp_table, ga4_df, overwrite = TRUE)
 }
 
 temp_table_data <- if (is_databricks()) {
-  sparklyr::sdf_sql(conn, paste0("SELECT * FROM ", table_name, "_temp")) %>%
+  sparklyr::sdf_sql(conn, paste0("SELECT * FROM ", temp_table)) %>%
     collect()
 } else {
-  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name, "_temp"))
+  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", temp_table))
 }
 
 test_that("Temp table data matches updated data", {
   expect_equal(nrow(temp_table_data), nrow(updated_data))
 })
 
-# Replace the old table with the new one
-dbExecute(conn, paste0("DROP TABLE IF EXISTS ", table_name))
+# Replace the live table's contents in a single Delta transaction.
+# Needs only SELECT + MODIFY (no MANAGE/ownership), and keeps the table's
+# owner, grants, comments and history intact.
+col_list <- paste0("`", names(updated_data), "`", collapse = ", ")
 dbExecute(
   conn,
-  paste0("ALTER TABLE ", table_name, "_temp RENAME TO ", table_name)
+  paste0(
+    "INSERT OVERWRITE TABLE ",
+    table_name,
+    " (",
+    col_list,
+    ") ",
+    "SELECT ",
+    col_list,
+    " FROM ",
+    temp_table
+  )
 )
 
 print_changes_summary(temp_table_data, previous_data)
