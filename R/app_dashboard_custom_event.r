@@ -32,7 +32,12 @@ app_custom_events <- "catalog_40_copper_statistics_services.dashboard_analytics_
 # Flag to control incremental vs full refresh processing
 # Set to TRUE to reprocess all data (e.g. after updating class definitions)
 if (is_databricks()) {
-  dbutils.widgets.dropdown("full_refresh", "FALSE", list("TRUE", "FALSE"), "Full Refresh")
+  dbutils.widgets.dropdown(
+    "full_refresh",
+    "FALSE",
+    list("TRUE", "FALSE"),
+    "Full Refresh"
+  )
   full_refresh_flag <- dbutils.widgets.get("full_refresh") == "TRUE"
 } else {
   # You'll need to either run Sys.setenv(FULL_REFRESH = "TRUE") on Positron, or add FULL_REFRESH=TRUE to a .Renviron file
@@ -62,7 +67,9 @@ previous_data <- tryCatch(
 # If the target table doesn't exist yet, force a full refresh
 if (is.null(previous_data)) {
   warning(
-    "Target table '", app_custom_events, "' does not exist. ",
+    "Target table '",
+    app_custom_events,
+    "' does not exist. ",
     "Forcing full refresh mode for initial load."
   )
   full_refresh_flag <- TRUE
@@ -81,18 +88,27 @@ if (!full_refresh_flag && nrow(previous_data) > 0) {
 
 # Retrieve data from the source table (filtered by cutoff date if incremental)
 ga4_raw_custom_events <- (if (is_databricks()) {
-  sparklyr::sdf_sql(conn, paste0("SELECT * FROM ", raw_custom_events, date_filter)) %>%
+  sparklyr::sdf_sql(
+    conn,
+    paste0("SELECT * FROM ", raw_custom_events, date_filter)
+  ) %>%
     collect()
 } else {
-  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", raw_custom_events, date_filter))
+  DBI::dbGetQuery(
+    conn,
+    paste0("SELECT * FROM ", raw_custom_events, date_filter)
+  )
 })
 
 # Validate that the source query returned data before continuing
 if (nrow(ga4_raw_custom_events) == 0) {
   stop(
     "No data returned from source table. ",
-    if (date_filter != "") paste0("No new records found since cutoff date ", cutoff_date, ".")
-    else "Source table appears to be empty."
+    if (date_filter != "") {
+      paste0("No new records found since cutoff date ", cutoff_date, ".")
+    } else {
+      "Source table appears to be empty."
+    }
   )
 }
 
@@ -115,18 +131,28 @@ latest_data <- ga4_raw_custom_events |>
   dplyr::mutate(
     event_label = gsub("_", " ", event_label),
     event_class = dplyr::case_when(
-      tolower(event_category) %in% c("navbar click", "service navigation") ~ "Top level navigation",
+      tolower(event_category) %in%
+        c("navbar click", "service navigation") ~ "Top level navigation",
       tolower(event_category) == "tab panel clicks" |
         grepl("Domain selection", event_category, ignore.case = TRUE) |
         grepl("Domain selection", event_label, ignore.case = TRUE) |
         grepl("accordion", event_category, ignore.case = TRUE) |
-        grepl("domain click", event_category, ignore.case = TRUE) ~ "Mid level navigation",
+        grepl(
+          "domain click",
+          event_category,
+          ignore.case = TRUE
+        ) ~ "Mid level navigation",
       tolower(event_category) == "choose area" &
         (grepl("\\bLSIP\\b", event_label, ignore.case = TRUE) |
           grepl("\\bCA\\b", event_label, ignore.case = TRUE) |
           grepl("\\bLADU\\b", event_label, ignore.case = TRUE) |
           tolower(trimws(event_label)) == "england" |
-          grepl(geography_pattern, event_label, ignore.case = TRUE, perl = TRUE)) ~ "Geography",
+          grepl(
+            geography_pattern,
+            event_label,
+            ignore.case = TRUE,
+            perl = TRUE
+          )) ~ "Geography",
       tolower(event_category) == "choose area" ~ "Other",
       tolower(event_category) == "geography" |
         grepl("^geographic_breakdown", event_category, ignore.case = TRUE) |
@@ -178,54 +204,60 @@ test_that("Data has no missing values", {
 
 # DBTITLE 1,Write to table
 ga4_df <- copy_to(conn, updated_data, overwrite = TRUE)
-
-# Write to temp table while we confirm we're good to overwrite data
+temp_table <- paste0(app_custom_events, "_temp")
+# Stage to a temp table so we can validate before touching the live table.
+# The job identity creates (and therefore owns) this table.
 if (is_databricks()) {
-  spark_write_table(
-    ga4_df,
-    paste0(app_custom_events, "_temp"),
-    mode = "overwrite"
-  )
+  spark_write_table(ga4_df, temp_table, mode = "overwrite")
 } else {
-  dbWriteTable(
-    conn,
-    paste0(app_custom_events, "_temp"),
-    ga4_df,
-    overwrite = TRUE
-  )
+  dbWriteTable(conn, temp_table, ga4_df, overwrite = TRUE)
 }
-
 temp_table_data <- if (is_databricks()) {
-  sparklyr::sdf_sql(
-    conn,
-    paste0("SELECT * FROM ", app_custom_events, "_temp")
-  ) %>%
+  sparklyr::sdf_sql(conn, paste0("SELECT * FROM ", temp_table)) %>%
     collect()
 } else {
-  DBI::dbGetQuery(
-    conn,
-    paste0("SELECT * FROM ", app_custom_events, "_temp")
-  )
+  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", temp_table))
 }
-
 test_that("Temp table data matches updated data", {
   expect_equal(nrow(temp_table_data), nrow(updated_data))
 })
-
-# Replace the old table with the new one
-dbExecute(conn, paste0("DROP TABLE IF EXISTS ", app_custom_events))
-dbExecute(
-  conn,
-  paste0(
-    "ALTER TABLE ",
-    app_custom_events,
-    "_temp RENAME TO ",
-    app_custom_events
-  )
+# Check if the live table already exists
+table_exists <- tryCatch(
+  {
+    dbExecute(conn, paste0("DESCRIBE TABLE ", app_custom_events))
+    TRUE
+  },
+  error = function(e) FALSE
 )
-
+if (table_exists) {
+  # Replace the live table's contents in a single Delta transaction.
+  # Needs only SELECT + MODIFY (no MANAGE/ownership), and keeps the table's
+  # owner, grants, comments and history intact.
+  col_list <- paste0("`", names(updated_data), "`", collapse = ", ")
+  dbExecute(
+    conn,
+    paste0(
+      "INSERT OVERWRITE TABLE ",
+      app_custom_events,
+      " (",
+      col_list,
+      ") ",
+      "SELECT ",
+      col_list,
+      " FROM ",
+      temp_table
+    )
+  )
+  # Tidy up the staging table (allowed because the job identity owns it)
+  dbExecute(conn, paste0("DROP TABLE IF EXISTS ", temp_table))
+} else {
+  # First run: no live table yet, so promote the staging table directly
+  dbExecute(
+    conn,
+    paste0("ALTER TABLE ", temp_table, " RENAME TO ", app_custom_events)
+  )
+}
 print_changes_summary(temp_table_data, previous_data)
-
 # Clear out the rubbish
 rm(list = ls())
 gc()
