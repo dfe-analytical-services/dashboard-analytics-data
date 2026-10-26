@@ -115,8 +115,8 @@ latest_data <- ga4_raw_custom_events |>
   dplyr::mutate(
     event_label = gsub("_", " ", event_label),
     event_class = dplyr::case_when(
-      tolower(event_category) %in% c("navbar click", "service navigation") ~ "Top level navigation",
-      tolower(event_category) == "tab panel clicks" |
+      tolower(event_category) %in% c("navbar click", "service navigation", "top level navigation") ~ "Top level navigation",
+      tolower(event_category) %in% c("tab panel clicks", "mid level navigation") |
         grepl("Domain selection", event_category, ignore.case = TRUE) |
         grepl("Domain selection", event_label, ignore.case = TRUE) |
         grepl("accordion", event_category, ignore.case = TRUE) |

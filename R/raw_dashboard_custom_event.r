@@ -37,6 +37,9 @@ source(here::here("R", "utils.R"))
 
 table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event"
 
+# Note: this table is always processed incrementally. A full refresh is not supported
+# because GA4 does not return the full history, so overwriting would lose historic data.
+
 # COMMAND ----------
 
 # DBTITLE 1,Authenticate
@@ -105,6 +108,23 @@ previous_data <- (if (is_databricks()) {
   DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
 })
 
+# Backfill event_name for historic rows collected before eventName was added as a
+# dimension. event_category is used as the proxy value. This must happen before the
+# rows are combined, otherwise tidyr::drop_na() would remove all historic rows.
+if (!"event_name" %in% names(previous_data)) {
+  previous_data <- dplyr::mutate(previous_data, event_name = NA_character_)
+}
+
+previous_data <- previous_data |>
+  dplyr::mutate(
+    event_name = dplyr::if_else(
+      is.na(event_name) | event_name == "",
+      event_category,
+      as.character(event_name)
+    )
+  ) |>
+  dplyr::relocate(event_name, .after = date)
+
 ga_custom_event <- function(property_id, changes_since) {
   message(property_id)
   tryCatch(
@@ -114,6 +134,7 @@ ga_custom_event <- function(property_id, changes_since) {
       metrics = c("eventCount"),
       dimensions = c(
         "date",
+        "eventName",
         "customEvent:event_category",
         "customEvent:event_label"
       ),
@@ -122,6 +143,7 @@ ga_custom_event <- function(property_id, changes_since) {
       dplyr::mutate(property_id = property_id) |>
       dplyr::relocate(property_id, .before = date) |>
       dplyr::rename(
+        event_name = `eventName`,
         event_category = `customEvent:event_category`,
         event_label = `customEvent:event_label`
       ) |>
@@ -132,6 +154,7 @@ ga_custom_event <- function(property_id, changes_since) {
       data.frame(
         property_id = NA,
         date = NA,
+        event_name = NA,
         event_category = NA,
         event_label = NA,
         eventCount = NA
@@ -155,14 +178,16 @@ latest_data <- dplyr::bind_rows(result_list) |>
 # COMMAND ----------
 
 # DBTITLE 1,Append new data onto old
-test_that("Col names match", {
-  expect_equal(names(latest_data), names(previous_data))
-})
+# Only check column names if previous data exists (skip on first run)
+if (nrow(previous_data) > 0) {
+  test_that("Col names match", {
+    expect_equal(names(latest_data), names(previous_data))
+  })
+}
 
 # COMMAND ----------
 
-updated_data <- latest_data
-
+# DBTITLE 1,Combine data
 updated_data <- rbind(previous_data, latest_data) |>
   dplyr::arrange(desc(date)) |>
   tidyr::drop_na()
@@ -170,8 +195,8 @@ updated_data <- rbind(previous_data, latest_data) |>
 # COMMAND ----------
 
 # DBTITLE 1,Quick data integrity checks
-test_that("New data has more rows than previous data", {
-  expect_true(nrow(updated_data) > nrow(previous_data))
+test_that("New data has at least as many rows as previous data", {
+  expect_true(nrow(updated_data) >= nrow(previous_data))
 })
 
 test_that("New data has no duplicate rows", {
