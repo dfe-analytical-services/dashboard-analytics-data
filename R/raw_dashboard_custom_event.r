@@ -28,15 +28,8 @@ source(here::here("R/params.R"))
 
 table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event"
 
-# Flag to control incremental vs full refresh processing
-# Set to TRUE to reprocess all data (e.g. after a schema change like adding event_name)
-if (is_databricks()) {
-  dbutils.widgets.dropdown("full_refresh", "FALSE", list("TRUE", "FALSE"), "Full Refresh")
-  full_refresh_flag <- dbutils.widgets.get("full_refresh") == "TRUE"
-} else {
-  # Run Sys.setenv(FULL_REFRESH = "TRUE") on Positron, or add FULL_REFRESH=TRUE to a .Renviron file
-  full_refresh_flag <- as.logical(Sys.getenv("FULL_REFRESH", "FALSE"))
-}
+# Note: this table is always processed incrementally. A full refresh is not supported
+# because GA4 does not return the full history, so overwriting would lose historic data.
 
 # COMMAND ----------
 
@@ -67,7 +60,7 @@ last_date <- if (is_databricks()) {
     as.character()
 }
 
-if (is.na(last_date) || full_refresh_flag) {
+if (is.na(last_date)) {
   # Before tracking started so gets the whole series that is available
   last_date <- "2022-02-02"
 }
@@ -98,22 +91,28 @@ if (changes_to < changes_since) {
 # COMMAND ----------
 
 # DBTITLE 1,Pull in data
-if (full_refresh_flag) {
-  previous_data <- data.frame(
-    property_id = character(),
-    date = as.Date(character()),
-    event_name = character(),
-    event_category = character(),
-    event_label = character(),
-    eventCount = numeric()
-  )
+previous_data <- (if (is_databricks()) {
+  sparklyr::sdf_sql(conn, paste("SELECT * FROM", table_name)) %>% collect()
 } else {
-  previous_data <- (if (is_databricks()) {
-    sparklyr::sdf_sql(conn, paste("SELECT * FROM", table_name)) %>% collect()
-  } else {
-    DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
-  })
+  DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
+})
+
+# Backfill event_name for historic rows collected before eventName was added as a
+# dimension. event_category is used as the proxy value. This must happen before the
+# rows are combined, otherwise tidyr::drop_na() would remove all historic rows.
+if (!"event_name" %in% names(previous_data)) {
+  previous_data <- dplyr::mutate(previous_data, event_name = NA_character_)
 }
+
+previous_data <- previous_data |>
+  dplyr::mutate(
+    event_name = dplyr::if_else(
+      is.na(event_name) | event_name == "",
+      event_category,
+      as.character(event_name)
+    )
+  ) |>
+  dplyr::relocate(event_name, .after = date)
 
 ga_custom_event <- function(property_id, changes_since) {
   message(property_id)
@@ -177,7 +176,7 @@ if (nrow(latest_data) > 0) {
 # COMMAND ----------
 
 # DBTITLE 1,Append new data onto old
-# Only check column names if previous data exists (skip on full refresh / first run)
+# Only check column names if previous data exists (skip on first run)
 if (nrow(previous_data) > 0) {
   test_that("Col names match", {
     expect_equal(names(latest_data), names(previous_data))
@@ -187,13 +186,9 @@ if (nrow(previous_data) > 0) {
 # COMMAND ----------
 
 # DBTITLE 1,Combine data
-if (full_refresh_flag) {
-  updated_data <- latest_data
-} else {
-  updated_data <- rbind(previous_data, latest_data) |>
-    dplyr::arrange(desc(date)) |>
-    tidyr::drop_na()
-}
+updated_data <- rbind(previous_data, latest_data) |>
+  dplyr::arrange(desc(date)) |>
+  tidyr::drop_na()
 
 # COMMAND ----------
 
