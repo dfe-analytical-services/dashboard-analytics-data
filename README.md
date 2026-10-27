@@ -1,6 +1,6 @@
 # dashboard-analytics-data
 
-Pipeline to import dashboard analytics data from Google Analytics 4 (GA4) into Unity Catalog for the [Dashboard Analytics](https://positconnect/dashboard-analytics-dashboard/) R Shiny app.
+Pipeline to import dashboard analytics data from Google Analytics 4 (GA4) into Unity Catalog for the [Dashboard Analytics](https://rsconnect/rsc/dashboard-analytics-dashboard/) R Shiny app.
 
 ## Summary
 
