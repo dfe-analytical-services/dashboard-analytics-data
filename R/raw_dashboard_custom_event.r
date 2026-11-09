@@ -108,23 +108,6 @@ previous_data <- (if (is_databricks()) {
   DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
 })
 
-# Backfill event_name for historic rows collected before eventName was added as a
-# dimension. event_category is used as the proxy value. This must happen before the
-# rows are combined, otherwise tidyr::drop_na() would remove all historic rows.
-if (!"event_name" %in% names(previous_data)) {
-  previous_data <- dplyr::mutate(previous_data, event_name = NA_character_)
-}
-
-previous_data <- previous_data |>
-  dplyr::mutate(
-    event_name = dplyr::if_else(
-      is.na(event_name) | event_name == "",
-      event_category,
-      as.character(event_name)
-    )
-  ) |>
-  dplyr::relocate(event_name, .after = date)
-
 ga_custom_event <- function(property_id, changes_since) {
   message(property_id)
   tryCatch(
@@ -174,6 +157,10 @@ result_list <- lapply(
 latest_data <- dplyr::bind_rows(result_list) |>
   dplyr::arrange(desc(date)) |>
   tidyr::drop_na()
+
+# COMMAND ----------
+
+display(previous_data)
 
 # COMMAND ----------
 
