@@ -34,7 +34,6 @@ lapply(packages, library, character.only = TRUE)
 
 source(here::here("R", "utils.R"))
 
-
 table_name <- "catalog_40_copper_statistics_services.dashboard_analytics_raw.ga4_raw_dashboard_custom_event"
 
 # Note: this table is always processed incrementally. A full refresh is not supported
@@ -112,18 +111,18 @@ previous_data <- (if (is_databricks()) {
 # dimension. event_category is used as the proxy value. This must happen before the
 # rows are combined, otherwise tidyr::drop_na() would remove all historic rows.
 if (!"event_name" %in% names(previous_data)) {
+  message("Adding new column 'event_name'")
   previous_data <- dplyr::mutate(previous_data, event_name = NA_character_)
+  previous_data <- previous_data |>
+    dplyr::mutate(
+      event_name = dplyr::if_else(
+        is.na(event_name) | event_name == "",
+        event_category,
+        as.character(event_name)
+      )
+    ) |>
+    dplyr::relocate(event_name, .after = date)
 }
-
-previous_data <- previous_data |>
-  dplyr::mutate(
-    event_name = dplyr::if_else(
-      is.na(event_name) | event_name == "",
-      event_category,
-      as.character(event_name)
-    )
-  ) |>
-  dplyr::relocate(event_name, .after = date)
 
 ga_custom_event <- function(property_id, changes_since) {
   message(property_id)
@@ -238,6 +237,24 @@ test_that("Temp table data matches updated data", {
 # Replace the live table's contents in a single Delta transaction.
 # Needs only SELECT + MODIFY (no MANAGE/ownership), and keeps the table's
 # owner, grants, comments and history intact.
+live_columns <- function(tbl) {
+  if (is_databricks()) {
+    names(sparklyr::sdf_sql(conn, paste("SELECT * FROM", tbl, "LIMIT 0")) %>% collect())
+  } else {
+    DBI::dbListFields(conn, tbl)
+  }
+}
+
+# Guarded schema change: add event_name only if the live table lacks it.
+# Requires ALTER privilege on the table; fails loudly if the job identity lacks it.
+if (!"event_name" %in% live_columns(table_name)) {
+  message("Adding column 'event_name' to live table ", table_name)
+  dbExecute(
+    conn,
+    paste0("ALTER TABLE ", table_name, " ADD COLUMNS (event_name STRING AFTER date)")
+  )
+}
+
 col_list <- paste0("`", names(updated_data), "`", collapse = ", ")
 
 dbExecute(
@@ -257,6 +274,11 @@ dbExecute(
 
 # Tidy up the staging table (allowed because the job identity owns it)
 dbExecute(conn, paste0("DROP TABLE IF EXISTS ", temp_table))
+
+# Post-run schema check: live table columns should match the data just written
+test_that("Live table columns match updated data after overwrite", {
+  expect_setequal(live_columns(table_name), names(updated_data))
+})
 
 print_changes_summary(temp_table_data, previous_data)
 
