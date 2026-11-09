@@ -108,23 +108,6 @@ previous_data <- (if (is_databricks()) {
   DBI::dbGetQuery(conn, paste0("SELECT * FROM ", table_name))
 })
 
-# Backfill event_name for historic rows collected before eventName was added as a
-# dimension. event_category is used as the proxy value. This must happen before the
-# rows are combined, otherwise tidyr::drop_na() would remove all historic rows.
-if (!"event_name" %in% names(previous_data)) {
-  previous_data <- dplyr::mutate(previous_data, event_name = NA_character_)
-}
-
-previous_data <- previous_data |>
-  dplyr::mutate(
-    event_name = dplyr::if_else(
-      is.na(event_name) | event_name == "",
-      event_category,
-      as.character(event_name)
-    )
-  ) |>
-  dplyr::relocate(event_name, .after = date)
-
 ga_custom_event <- function(property_id, changes_since) {
   message(property_id)
   tryCatch(
@@ -177,7 +160,26 @@ latest_data <- dplyr::bind_rows(result_list) |>
 
 # COMMAND ----------
 
+display(previous_data)
+
+# COMMAND ----------
+
 # DBTITLE 1,Append new data onto old
+# Fixed schema expected for the raw custom event table (order matters, as the
+# write step uses these names for the INSERT OVERWRITE column list)
+expected_cols <- c(
+  "property_id",
+  "date",
+  "event_name",
+  "event_category",
+  "event_label",
+  "eventCount"
+)
+
+test_that("New data has the expected columns", {
+  expect_equal(names(latest_data), expected_cols)
+})
+
 # Only check column names if previous data exists (skip on first run)
 if (nrow(previous_data) > 0) {
   test_that("Col names match", {
