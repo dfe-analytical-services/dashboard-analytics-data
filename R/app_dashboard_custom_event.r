@@ -164,6 +164,22 @@ latest_data <- ga4_raw_custom_events |>
 # COMMAND ----------
 
 # DBTITLE 1,Combine and validate data
+# Fixed schema expected for the app custom events table: the raw table's
+# columns plus event_class (order matters for the INSERT OVERWRITE column list)
+expected_cols <- c(
+  "property_id",
+  "date",
+  "event_name",
+  "event_category",
+  "event_label",
+  "eventCount",
+  "event_class"
+)
+
+test_that("New data has the expected columns", {
+  expect_equal(names(latest_data), expected_cols)
+})
+
 # Only check column names if previous data exists (skip on first run)
 if (nrow(previous_data) > 0) {
   test_that("Col names match", {
@@ -183,6 +199,12 @@ if (full_refresh_flag) {
 # COMMAND ----------
 
 # DBTITLE 1,Quick data integrity checks
+# bind_rows() silently adds columns if previous and new data differ, so
+# re-check the combined data before it is written
+test_that("Combined data has the expected columns", {
+  expect_equal(names(updated_data), expected_cols)
+})
+
 test_that("New data has at least as many rows as previous data", {
   expect_true(nrow(updated_data) >= nrow(previous_data))
 })

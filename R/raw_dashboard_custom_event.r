@@ -165,6 +165,21 @@ display(previous_data)
 # COMMAND ----------
 
 # DBTITLE 1,Append new data onto old
+# Fixed schema expected for the raw custom event table (order matters, as the
+# write step uses these names for the INSERT OVERWRITE column list)
+expected_cols <- c(
+  "property_id",
+  "date",
+  "event_name",
+  "event_category",
+  "event_label",
+  "eventCount"
+)
+
+test_that("New data has the expected columns", {
+  expect_equal(names(latest_data), expected_cols)
+})
+
 # Only check column names if previous data exists (skip on first run)
 if (nrow(previous_data) > 0) {
   test_that("Col names match", {

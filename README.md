@@ -91,6 +91,14 @@ Incremental notebooks fetch from the latest stored date + 1 through `Sys.Date() 
 
 To reprocess all custom events after changing event-class definitions, run `app_dashboard_custom_event` manually with the `full_refresh` widget set to `TRUE` on Databricks, or set `FULL_REFRESH=TRUE` in your environment locally. The scheduled job runs with the default `FALSE`.
 
+### Schema changes
+
+The notebooks replace live table contents with `INSERT OVERWRITE` using an explicit column list. This doesn't change the table schema, so when you add or rename a column:
+
+1. Update the `expected_cols` list in the affected notebook(s).
+2. Add the column to the live raw table (e.g. `ALTER TABLE ... ADD COLUMNS`) before the next scheduled run, or the write will fail with `UNRESOLVED_COLUMN`.
+3. Run `app_dashboard_custom_event` once with `full_refresh` set to `TRUE` so the app table is rebuilt from the raw table with the new column populated.
+
 ## Detailed file descriptions
 
 ### `R/params.R`
@@ -126,7 +134,11 @@ Incremental ingestion of daily metrics (`totalUsers`, `screenPageViews`, `sessio
 
 ### `R/raw_dashboard_custom_event`
 
-Incremental ingestion of custom event data into `dashboard_analytics_raw.ga4_raw_dashboard_custom_event`. Same incremental and write pattern as `raw_dashboard_daily`, but fetches `eventCount` by `date`, `event_category`, and `event_label`, and filters out `"(not set)"` / empty labels.
+Incremental ingestion of custom event data into `dashboard_analytics_raw.ga4_raw_dashboard_custom_event`. Same incremental and write pattern as `raw_dashboard_daily`, but fetches `eventCount` by `date`, `event_name` (the GA4 `eventName` dimension), `event_category`, and `event_label`, and filters out `"(not set)"` categories and `"(not set)"` / empty labels.
+
+Output columns, in order: `property_id`, `date`, `event_name`, `event_category`, `event_label`, `eventCount`. A `testthat` check fails the run if the new data doesn't match this list exactly. Historic rows loaded before `event_name` was added have `event_name` set to the same value as `event_category`.
+
+This table is always processed incrementally and must never be fully refreshed, because GA4 doesn't return the full history and overwriting the table would lose historic data.
 
 ### `R/app_dashboard_reference`
 
@@ -134,7 +146,7 @@ Builds `dashboard_analytics_app.dashboard_property_reference` by joining `data/a
 
 ### `R/app_dashboard_custom_event`
 
-Creates `dashboard_analytics_app.dashboard_custom_events` from the raw custom event table. Supports incremental or full-refresh mode. Classifies each event into one of four classes:
+Creates `dashboard_analytics_app.dashboard_custom_events` from the raw custom event table. Supports incremental or full-refresh mode. Carries over all raw columns (including `event_name`) and adds `event_class`. Output columns, in order: `property_id`, `date`, `event_name`, `event_category`, `event_label`, `eventCount`, `event_class`. `testthat` checks validate both the newly classified data and the combined data against this list. Classifies each event into one of four classes:
 
 * **Top level navigation** — navbar clicks, service navigation
 * **Mid level navigation** — tab panel clicks, domain selection, accordion interactions
