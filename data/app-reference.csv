@@ -44,3 +44,4 @@ property_id,property_name,application_type,status,date_first_published,group,tea
 533049770,Teacher workforce analysis dashboard,Data dashboard,Live,,Teacher analysis division,Teacher Workforce Model & Allocations Team,public,,github/dfe-analytical-services,
 543055271,HE widening participation,Data dashboard,Live,2026-07-09,Higher Education Statistics and Resesarch Unit,Higher Education Statistics and Resesarch Unit,public,,github/dfe-analytical-services,
 549666958,Longer term destinations dashboard,Data dashboard,In development,,Destination Measures,Destination Measures,public,,github/dfe-analytical-services,
+563826686,SCAP reporting dashboard,Data dashboard,In development,,Capital Funding Analysis Unit,Education Estates Data Collection & Analysis,public,,github/dfe-analytical-services,
